@@ -604,7 +604,7 @@
   <x:String x:Key="Text.MergeConflictEditor.UseBoth" xml:space="preserve">Use Both</x:String>
   <x:String x:Key="Text.MergeConflictEditor.AllResolved" xml:space="preserve">All conflicts resolved</x:String>
   <x:String x:Key="Text.MergeConflictEditor.ConflictsRemaining" xml:space="preserve">{0} conflict(s) remaining</x:String>
-  <x:String x:Key="Text.MergeConflictEditor.Mine" xml:space="preserve">MINE</x:String>
+  <x:String x:Key="Text.MergeConflictEditor.Mine" xml:space="preserve">OURS</x:String>
   <x:String x:Key="Text.MergeConflictEditor.NextConflict" xml:space="preserve">Next Conflict</x:String>
   <x:String x:Key="Text.MergeConflictEditor.PrevConflict" xml:space="preserve">Previous Conflict</x:String>
   <x:String x:Key="Text.MergeConflictEditor.Result" xml:space="preserve">RESULT</x:String>
@@ -612,7 +612,7 @@
   <x:String x:Key="Text.MergeConflictEditor.Theirs" xml:space="preserve">THEIRS</x:String>
   <x:String x:Key="Text.MergeConflictEditor.Title" xml:space="preserve">Merge Conflicts</x:String>
   <x:String x:Key="Text.MergeConflictEditor.UnsavedChanges" xml:space="preserve">Discard unsaved changes?</x:String>
-  <x:String x:Key="Text.MergeConflictEditor.UseMine" xml:space="preserve">Use Mine</x:String>
+  <x:String x:Key="Text.MergeConflictEditor.UseMine" xml:space="preserve">Use Ours</x:String>
   <x:String x:Key="Text.MergeConflictEditor.UseTheirs" xml:space="preserve">Use Theirs</x:String>
   <x:String x:Key="Text.MergeConflictEditor.Undo" xml:space="preserve">Undo</x:String>
   <x:String x:Key="Text.MergeMultiple" xml:space="preserve">Merge (Multiple)</x:String>

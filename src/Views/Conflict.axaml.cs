@@ -55,5 +55,41 @@ namespace SourceGit.Views
 
             e.Handled = true;
         }
+
+        private async void OnLock(object _, RoutedEventArgs e)
+        {
+            if (DataContext is ViewModels.Conflict vm)
+                await vm.LockAsync();
+
+            e.Handled = true;
+        }
+
+        private async void OnUnlock(object _, RoutedEventArgs e)
+        {
+            if (DataContext is ViewModels.Conflict vm)
+                await vm.UnlockAsync(false);
+
+            e.Handled = true;
+        }
+
+        private async void OnForceUnlock(object _, RoutedEventArgs e)
+        {
+            e.Handled = true;
+
+            if (DataContext is not ViewModels.Conflict { Lock: { } lfsLock } vm)
+                return;
+
+            var msg = $"Force unlock '{vm.FileName}'? The lock is held by {lfsLock.Owner?.Name}.";
+            if (await App.AskConfirmAsync(msg))
+                await vm.UnlockAsync(true);
+        }
+
+        private async void OnRefreshLock(object _, RoutedEventArgs e)
+        {
+            if (DataContext is ViewModels.Conflict vm)
+                await vm.RefreshLockAsync();
+
+            e.Handled = true;
+        }
     }
 }

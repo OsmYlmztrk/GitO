@@ -234,6 +234,13 @@
                 </Grid>
               </Button>
 
+              <Button Classes="nav_item" Click="OnOpenLFSLocks" IsVisible="{Binding Remotes, Converter={x:Static c:ListConverters.IsNotNullOrEmpty}}">
+                <Grid ColumnDefinitions="Auto,*">
+                  <Path Grid.Column="0" Classes="nav_icon" Data="{StaticResource Icons.Lock}"/>
+                  <TextBlock Grid.Column="1" Margin="8,0,0,0" Text="LFS Locks" TextTrimming="CharacterEllipsis"/>
+                </Grid>
+              </Button>
+
               <Button Classes="nav_item" Click="OnOpenConfigure">
                 <Grid ColumnDefinitions="Auto,*">
                   <Path Grid.Column="0" Classes="nav_icon" Data="{StaticResource Icons.Settings}"/>

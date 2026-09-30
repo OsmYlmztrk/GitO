@@ -96,6 +96,17 @@ namespace SourceGit.Views
             e.Handled = true;
         }
 
+        private async void OnOpenLFSLocks(object sender, RoutedEventArgs e)
+        {
+            e.Handled = true;
+
+            if (DataContext is not ViewModels.Repository { Remotes.Count: > 0 } repo)
+                return;
+
+            var remote = repo.Remotes.Find(x => x.Name == "origin") ?? repo.Remotes[0];
+            await this.ShowDialogAsync(new ViewModels.LFSLocks(repo, remote.Name));
+        }
+
         private async void OnOpenConfigure(object sender, RoutedEventArgs e)
         {
             if (DataContext is ViewModels.Repository repo)

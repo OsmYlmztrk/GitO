@@ -6,151 +6,258 @@
              xmlns:v="using:SourceGit.Views"
              xmlns:vm="using:SourceGit.ViewModels"
              xmlns:c="using:SourceGit.Converters"
-             mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
+             mc:Ignorable="d" d:DesignWidth="900" d:DesignHeight="600"
              x:Class="SourceGit.Views.Conflict"
              x:DataType="vm:Conflict">
-  <Border CornerRadius="4" Background="{DynamicResource Brush.Window}" BorderThickness="1" BorderBrush="{DynamicResource Brush.Border2}">
-    <Grid VerticalAlignment="Center">
-      <StackPanel Orientation="Vertical" IsVisible="{Binding State, Mode=OneWay, Converter={x:Static ObjectConverters.NotEqual}, ConverterParameter={x:Static m:ConflictFileState.Resolved}}">
-        <Path Width="64" Height="64" Data="{StaticResource Icons.Conflict}" Fill="{DynamicResource Brush.FG2}" HorizontalAlignment="Center"/>
-        <TextBlock Margin="0,16" FontSize="20" FontWeight="Bold" Text="{DynamicResource Text.WorkingCopy.Conflicts}" Foreground="{DynamicResource Brush.FG2}" HorizontalAlignment="Center"/>
+  <UserControl.Styles>
+    <!-- MyGitGUI: Fork-style conflict panel -->
+    <Style Selector="Border.card">
+      <Setter Property="Padding" Value="12"/>
+      <Setter Property="CornerRadius" Value="8"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource Brush.Border2}"/>
+      <Setter Property="Background" Value="{DynamicResource Brush.Window}"/>
+    </Style>
+    <Style Selector="Border.chip">
+      <Setter Property="Height" Value="18"/>
+      <Setter Property="Padding" Value="6,0"/>
+      <Setter Property="Margin" Value="6,0,0,0"/>
+      <Setter Property="CornerRadius" Value="4"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="VerticalAlignment" Value="Center"/>
+    </Style>
+    <Style Selector="Border.chip TextBlock">
+      <Setter Property="FontSize" Value="11"/>
+      <Setter Property="FontWeight" Value="Medium"/>
+      <Setter Property="VerticalAlignment" Value="Center"/>
+    </Style>
+    <Style Selector="TextBlock.side_title">
+      <Setter Property="FontSize" Value="11"/>
+      <Setter Property="FontWeight" Value="Bold"/>
+      <Setter Property="VerticalAlignment" Value="Center"/>
+    </Style>
+    <Style Selector="TextBlock.kv_key">
+      <Setter Property="Width" Value="56"/>
+      <Setter Property="FontSize" Value="11"/>
+      <Setter Property="Foreground" Value="{DynamicResource Brush.FG2}"/>
+      <Setter Property="VerticalAlignment" Value="Center"/>
+    </Style>
+    <Style Selector="Button.take">
+      <Setter Property="Height" Value="32"/>
+      <Setter Property="Margin" Value="0,10,0,0"/>
+      <Setter Property="CornerRadius" Value="5"/>
+      <Setter Property="BorderThickness" Value="0"/>
+      <Setter Property="HorizontalAlignment" Value="Stretch"/>
+      <Setter Property="HorizontalContentAlignment" Value="Center"/>
+      <Setter Property="VerticalContentAlignment" Value="Center"/>
+    </Style>
+    <Style Selector="Button.take:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Opacity" Value="0.85"/>
+    </Style>
+  </UserControl.Styles>
 
-        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,0,0,8">
-          <Border Height="16" VerticalAlignment="Center" Background="Red" CornerRadius="8">
-            <TextBlock Text="{Binding Marker}" Foreground="White" FontWeight="Bold" Margin="8,0" FontSize="10"/>
-          </Border>
-
-          <TextBlock Margin="8,0,0,0" VerticalAlignment="Center" Text="{Binding Description}"/>
+  <UserControl.DataTemplates>
+    <DataTemplate DataType="m:Commit">
+      <StackPanel Orientation="Vertical" Spacing="6">
+        <StackPanel Orientation="Horizontal">
+          <TextBlock Classes="kv_key" Text="Commit"/>
+          <TextBlock Text="{Binding SHA, Converter={x:Static c:StringConverters.ToShortSHA}}"
+                     FontFamily="{DynamicResource Fonts.Monospace}"
+                     Foreground="{DynamicResource Brush.Link}"
+                     TextDecorations="Underline"
+                     Cursor="Hand"
+                     VerticalAlignment="Center"
+                     PointerPressed="OnPressedSHA"/>
+          <v:CommitRefsPresenter Margin="6,0,0,0"
+                                 Foreground="{DynamicResource Brush.FG1}"
+                                 FontSize="11"
+                                 VerticalAlignment="Center"
+                                 UseGraphColor="False"/>
         </StackPanel>
-
-        <Border Margin="16,0" Padding="8" CornerRadius="4" BorderThickness="1" BorderBrush="{DynamicResource Brush.Border2}">
-          <Border.DataTemplates>
-            <DataTemplate DataType="m:Commit">
-              <StackPanel Orientation="Horizontal">
-                <v:CommitRefsPresenter Foreground="{DynamicResource Brush.FG1}"
-                                       FontSize="12"
-                                       VerticalAlignment="Center"
-                                       UseGraphColor="False"/>
-                <TextBlock Margin="4,0,0,0"
-                           Text="{Binding SHA, Converter={x:Static c:StringConverters.ToShortSHA}}"
-                           FontFamily="{DynamicResource Fonts.Monospace}"
-                           Foreground="DarkOrange"
-                           TextDecorations="Underline"
-                           Cursor="Hand"
-                           PointerPressed="OnPressedSHA"/>
-                <TextBlock Margin="4,0,0,0" Text="{Binding Subject}"/>
-              </StackPanel>
-            </DataTemplate>
-
-            <DataTemplate DataType="x:String">
-              <StackPanel Orientation="Horizontal">
-                <Path Width="12" Height="12" Data="{StaticResource Icons.Changes}"/>
-                <TextBlock Margin="4,0,0,0" Text="{Binding}"/>
-              </StackPanel>
-            </DataTemplate>
-          </Border.DataTemplates>
-
-          <Grid Margin="8,0,0,0" RowDefinitions="32,32" ColumnDefinitions="Auto,*">
-            <TextBlock Grid.Row="0" Grid.Column="0" Classes="info_label" Text="MINE"/>
-            <ContentControl Grid.Row="0" Grid.Column="1" Margin="16,0,0,0" Content="{Binding Mine}"/>
-            <TextBlock Grid.Row="1" Grid.Column="0" Classes="info_label" Text="THEIRS"/>
-            <ContentControl Grid.Row="1" Grid.Column="1" Margin="16,0,0,0" Content="{Binding Theirs}"/>
-          </Grid>
-        </Border>
-
-        <StackPanel Margin="0,8,0,0" Orientation="Horizontal" HorizontalAlignment="Center">
-          <Button Classes="flat" Margin="0,0,0,0" Click="OnUseTheirs">
-            <StackPanel Orientation="Horizontal">
-              <Path Width="12" Height="12" Data="{StaticResource Icons.Incoming}"/>
-              <TextBlock Margin="6,0,0,0" Text="{DynamicResource Text.WorkingCopy.Conflicts.UseTheirs}" VerticalAlignment="Center"/>
-            </StackPanel>
-          </Button>
-          <Button Classes="flat" Margin="8,0,0,0" Click="OnUseMine">
-            <StackPanel Orientation="Horizontal">
-              <Path Width="12" Height="12" Data="{StaticResource Icons.Local}"/>
-              <TextBlock Margin="6,0,0,0" Text="{DynamicResource Text.WorkingCopy.Conflicts.UseMine}" VerticalAlignment="Center"/>
-            </StackPanel>
-          </Button>
-          <SplitButton Height="28"
-                       Margin="8,0,0,0" Padding="8,0"
-                       Click="OnMerge"
-                       IsVisible="{Binding State, Mode=OneWay, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static m:ConflictFileState.UnmergedText}}">
-            <SplitButton.Styles>
-              <Style Selector="SplitButton">
-                <Setter Property="MinHeight" Value="24"/>
-                <Setter Property="Template">
-                  <ControlTemplate>
-                    <Grid ColumnDefinitions="*,1,Auto">
-                      <Button x:Name="PART_PrimaryButton"
-                              Grid.Column="0"
-                              Classes="flat primary"
-                              MinWidth="32"
-                              HorizontalAlignment="Stretch"
-                              VerticalAlignment="Stretch"
-                              Content="{TemplateBinding Content}"
-                              ContentTemplate="{TemplateBinding ContentTemplate}"
-                              Command="{TemplateBinding Command}"
-                              CommandParameter="{TemplateBinding CommandParameter}"
-                              CornerRadius="3,0,0,3"
-                              Padding="{TemplateBinding Padding}"
-                              Focusable="False"
-                              KeyboardNavigation.IsTabStop="False" />
-
-                      <Button x:Name="PART_SecondaryButton"
-                              Grid.Column="2"
-                              Classes="flat primary"
-                              Width="32"
-                              CornerRadius="0,3,3,0"
-                              Padding="0"
-                              Focusable="False"
-                              HorizontalAlignment="Stretch"
-                              VerticalAlignment="Stretch"
-                              KeyboardNavigation.IsTabStop="False">
-                        <Path Height="12" Width="12"
-                              Margin="0,4,0,0"
-                              Fill="{DynamicResource AccentButtonForeground}"
-                              Data="{DynamicResource Icons.Down}"/>
-                      </Button>
-                    </Grid>
-                  </ControlTemplate>
-                </Setter>
-
-                <Style Selector="^:disabled /template/ Button">
-                  <Setter Property="BorderThickness" Value="1"/>
-                  <Setter Property="BorderBrush" Value="{DynamicResource Brush.Border2}"/>
-                  <Setter Property="Background" Value="Transparent"/>
-                </Style>
-
-                <Style Selector="^:disabled AccessText">
-                  <Setter Property="Foreground" Value="{DynamicResource Brush.FG2}"/>
-                </Style>
-
-                <Style Selector="^:disabled Path">
-                  <Setter Property="Fill" Value="{DynamicResource Brush.FG2}"/>
-                </Style>
-              </Style>
-            </SplitButton.Styles>
-
-            <SplitButton.Flyout>
-              <MenuFlyout Placement="BottomEdgeAlignedLeft">
-                <MenuItem Header="{DynamicResource Text.WorkingCopy.Conflicts.MergeExternal}"
-                          Click="OnMergeExternal">
-                  <MenuItem.Icon>
-                    <Path Width="12" Height="12" Data="{StaticResource Icons.OpenWith}"/>
-                  </MenuItem.Icon>
-                </MenuItem>
-              </MenuFlyout>
-            </SplitButton.Flyout>
-
-            <StackPanel Orientation="Horizontal">
-              <Path Width="12" Height="12" Data="{StaticResource Icons.Conflict}" Fill="White"/>
-              <TextBlock Margin="6,0,0,0" Text="{DynamicResource Text.WorkingCopy.Conflicts.Merge}" Foreground="White"/>
-            </StackPanel>
-          </SplitButton>
+        <Grid ColumnDefinitions="56,*">
+          <TextBlock Grid.Column="0" Classes="kv_key" Text="Subject"/>
+          <TextBlock Grid.Column="1" Text="{Binding Subject}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+        </Grid>
+        <StackPanel Orientation="Horizontal">
+          <TextBlock Classes="kv_key" Text="Author"/>
+          <v:Avatar Width="16" Height="16" VerticalAlignment="Center" User="{Binding Author}"/>
+          <TextBlock Margin="6,0,0,0" Text="{Binding Author.Name}" VerticalAlignment="Center"/>
+        </StackPanel>
+        <StackPanel Orientation="Horizontal">
+          <TextBlock Classes="kv_key" Text="Date"/>
+          <v:DateTimePresenter Timestamp="{Binding AuthorTime}" VerticalAlignment="Center"/>
         </StackPanel>
       </StackPanel>
+    </DataTemplate>
 
-      <StackPanel Orientation="Vertical" IsVisible="{Binding State, Mode=OneWay, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static m:ConflictFileState.Resolved}}">
+    <DataTemplate DataType="x:String">
+      <StackPanel Orientation="Horizontal">
+        <Path Width="12" Height="12" Data="{StaticResource Icons.Changes}"/>
+        <TextBlock Margin="6,0,0,0" Text="{Binding}"/>
+      </StackPanel>
+    </DataTemplate>
+  </UserControl.DataTemplates>
+
+  <Border Background="{DynamicResource Brush.Contents}" BorderThickness="1" BorderBrush="{DynamicResource Brush.Border2}" CornerRadius="4" ClipToBounds="True">
+    <Grid RowDefinitions="40,*">
+      <!-- Header -->
+      <Border Grid.Row="0" Padding="12,0" Background="{DynamicResource Brush.SubPanel}" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource Brush.Border2}">
+        <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto">
+          <Path Grid.Column="0" Width="13" Height="13" Data="{StaticResource Icons.File}" Fill="{DynamicResource Brush.FG2}"/>
+          <TextBlock Grid.Column="1" Margin="8,0" Text="{Binding FilePath}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+
+          <Border Grid.Column="2" Classes="chip" Background="#18888888" BorderBrush="{DynamicResource Brush.Border1}" IsVisible="{Binding IsBinary}">
+            <TextBlock Text="Binary" Foreground="{DynamicResource Brush.FG2}"/>
+          </Border>
+          <Border Grid.Column="3" Classes="chip" Background="#28B77EE0" BorderBrush="#A0B77EE0" IsVisible="{Binding IsLFS}">
+            <TextBlock Text="LFS" Foreground="#FFB77EE0"/>
+          </Border>
+          <Border Grid.Column="4" Classes="chip" Background="#28F0A33A" BorderBrush="#A0F0A33A" IsVisible="{Binding IsLockedByOthers}">
+            <StackPanel Orientation="Horizontal" Spacing="4">
+              <Path Width="10" Height="10" Data="{StaticResource Icons.Lock}" Fill="#FFF0A33A"/>
+              <TextBlock Foreground="#FFF0A33A">
+                <Run Text="Locked by"/>
+                <Run Text="{Binding Lock.Owner.Name}"/>
+              </TextBlock>
+            </StackPanel>
+          </Border>
+          <Border Grid.Column="4" Classes="chip" Background="#284C9AFF" BorderBrush="#A04C9AFF" IsVisible="{Binding IsLockedByMe}">
+            <StackPanel Orientation="Horizontal" Spacing="4">
+              <Path Width="10" Height="10" Data="{StaticResource Icons.Lock}" Fill="{DynamicResource Brush.Accent}"/>
+              <TextBlock Text="Locked by you" Foreground="{DynamicResource Brush.Accent}"/>
+            </StackPanel>
+          </Border>
+          <Border Grid.Column="5" Classes="chip" Background="#28E5534B" BorderBrush="#A0E5534B">
+            <TextBlock Foreground="#FFF08A84">
+              <Run Text="{Binding Marker}" FontWeight="Bold"/>
+              <Run Text="{Binding Description}"/>
+            </TextBlock>
+          </Border>
+        </Grid>
+      </Border>
+
+      <!-- Unresolved -->
+      <ScrollViewer Grid.Row="1"
+                    HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto"
+                    IsVisible="{Binding State, Mode=OneWay, Converter={x:Static ObjectConverters.NotEqual}, ConverterParameter={x:Static m:ConflictFileState.Resolved}}">
+        <StackPanel Orientation="Vertical" Margin="20,16" Spacing="14" MaxWidth="980">
+          <!-- Explanation -->
+          <Grid ColumnDefinitions="Auto,*">
+            <Path Grid.Column="0" Width="14" Height="14" VerticalAlignment="Top" Margin="0,2,0,0" Data="{StaticResource Icons.Error}" Fill="#FFD19A3A"/>
+            <TextBlock Grid.Column="1" Margin="8,0,0,0" TextWrapping="Wrap" Foreground="{DynamicResource Brush.FG2}"
+                       Text="This binary asset changed on both sides and can't be merged line by line. Keep one version, or merge both in your external merge tool (e.g. Unreal Editor)."
+                       IsVisible="{Binding IsBinary}"/>
+            <TextBlock Grid.Column="1" Margin="8,0,0,0" TextWrapping="Wrap" Foreground="{DynamicResource Brush.FG2}"
+                       Text="Both sides changed this file. Open the merge editor to pick changes chunk by chunk, or keep one side entirely."
+                       IsVisible="{Binding !IsBinary}"/>
+          </Grid>
+
+          <!-- Ours / Theirs -->
+          <UniformGrid Columns="2" ColumnSpacing="14">
+            <Border Classes="card" BorderBrush="#734C9AFF">
+              <StackPanel Orientation="Vertical">
+                <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                  <TextBlock Classes="side_title" Text="OURS" Foreground="{DynamicResource Brush.Accent}"/>
+                  <Path Width="12" Height="12" Margin="8,0,0,0" Data="{StaticResource Icons.Local}" Fill="{DynamicResource Brush.Accent}"/>
+                </StackPanel>
+                <ContentControl Content="{Binding Mine}"/>
+                <Button Classes="take" Background="{DynamicResource Brush.Accent}" Click="OnUseMine">
+                  <StackPanel Orientation="Horizontal" Spacing="6">
+                    <Path Width="12" Height="12" Data="{StaticResource Icons.Check}" Fill="White"/>
+                    <TextBlock Text="Take Ours" FontWeight="SemiBold" Foreground="White"/>
+                  </StackPanel>
+                </Button>
+              </StackPanel>
+            </Border>
+
+            <Border Classes="card" BorderBrush="#73F0A33A">
+              <StackPanel Orientation="Vertical">
+                <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                  <TextBlock Classes="side_title" Text="THEIRS" Foreground="#FFF0A33A"/>
+                  <Path Width="12" Height="12" Margin="8,0,0,0" Data="{StaticResource Icons.Incoming}" Fill="#FFF0A33A"/>
+                </StackPanel>
+                <ContentControl Content="{Binding Theirs}"/>
+                <Button Classes="take" Background="#FFF0A33A" Click="OnUseTheirs">
+                  <StackPanel Orientation="Horizontal" Spacing="6">
+                    <Path Width="12" Height="12" Data="{StaticResource Icons.Check}" Fill="#FF1C1C1E"/>
+                    <TextBlock Text="Take Theirs" FontWeight="SemiBold" Foreground="#FF1C1C1E"/>
+                  </StackPanel>
+                </Button>
+              </StackPanel>
+            </Border>
+          </UniformGrid>
+
+          <!-- Tools -->
+          <UniformGrid Columns="2" ColumnSpacing="14">
+            <!-- Merge -->
+            <Border Classes="card">
+              <StackPanel Orientation="Vertical" Spacing="8">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                  <Path Width="14" Height="14" Data="{StaticResource Icons.Conflict}"/>
+                  <TextBlock Text="Merge" FontWeight="SemiBold"/>
+                </StackPanel>
+                <TextBlock TextWrapping="Wrap" FontSize="11" Foreground="{DynamicResource Brush.FG2}"
+                           Text="Pick changes from Ours and Theirs chunk by chunk in the built-in 3-way editor."
+                           IsVisible="{Binding !IsBinary}"/>
+                <TextBlock TextWrapping="Wrap" FontSize="11" Foreground="{DynamicResource Brush.FG2}"
+                           Text="Opens the merge tool configured in Preferences › Diff/Merge Tool with Base, Ours and Theirs. Resolve there, then stage the file."
+                           IsVisible="{Binding IsBinary}"/>
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                  <Button Classes="flat primary" Height="28" Padding="10,0" Click="OnMerge"
+                          IsVisible="{Binding State, Mode=OneWay, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static m:ConflictFileState.UnmergedText}}">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                      <Path Width="12" Height="12" Data="{StaticResource Icons.Conflict}" Fill="White"/>
+                      <TextBlock Text="{DynamicResource Text.WorkingCopy.Conflicts.Merge}" Foreground="White"/>
+                    </StackPanel>
+                  </Button>
+                  <Button Classes="flat" Height="28" Padding="10,0" Click="OnMergeExternal"
+                          IsVisible="{Binding CanUseExternalMergeTool}">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                      <Path Width="12" Height="12" Data="{StaticResource Icons.OpenWith}"/>
+                      <TextBlock Text="{DynamicResource Text.WorkingCopy.Conflicts.MergeExternal}"/>
+                    </StackPanel>
+                  </Button>
+                </StackPanel>
+              </StackPanel>
+            </Border>
+
+            <!-- LFS lock -->
+            <Border Classes="card" IsVisible="{Binding IsLFS}">
+              <StackPanel Orientation="Vertical" Spacing="8">
+                <Grid ColumnDefinitions="Auto,Auto,*,Auto">
+                  <Path Grid.Column="0" Width="14" Height="14" Data="{StaticResource Icons.Lock}"/>
+                  <TextBlock Grid.Column="1" Margin="8,0,0,0" Text="LFS Lock" FontWeight="SemiBold"/>
+                  <v:LoadingIcon Grid.Column="3" Width="14" Height="14" IsVisible="{Binding IsLockInfoLoading}"/>
+                </Grid>
+
+                <TextBlock FontSize="11" Foreground="{DynamicResource Brush.FG2}" TextWrapping="Wrap"
+                           Text="Not locked. Lock the file before editing so nobody else changes it in the meantime."
+                           IsVisible="{Binding !IsLocked}"/>
+                <TextBlock FontSize="11" Foreground="{DynamicResource Brush.FG2}" TextWrapping="Wrap"
+                           Text="You hold the lock on this file. Unlock it after the merge is pushed."
+                           IsVisible="{Binding IsLockedByMe}"/>
+                <TextBlock FontSize="11" Foreground="{DynamicResource Brush.FG2}" TextWrapping="Wrap" IsVisible="{Binding IsLockedByOthers}">
+                  <Run Text="{Binding Lock.Owner.Name}" Foreground="#FFF0A33A" FontWeight="SemiBold"/>
+                  <Run Text="holds the lock. Taking Ours overwrites their locked work — ask them to unlock, or force unlock if you have admin rights."/>
+                </TextBlock>
+
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                  <Button Classes="flat" Height="28" Padding="10,0" Content="Lock" Click="OnLock" IsVisible="{Binding !IsLocked}"/>
+                  <Button Classes="flat" Height="28" Padding="10,0" Content="Unlock" Click="OnUnlock" IsVisible="{Binding IsLockedByMe}"/>
+                  <Button Classes="flat" Height="28" Padding="10,0" Click="OnForceUnlock" IsVisible="{Binding IsLockedByOthers}">
+                    <TextBlock Text="Force Unlock" Foreground="#FFF08A84"/>
+                  </Button>
+                  <Button Classes="flat" Height="28" Padding="10,0" Content="Refresh" Click="OnRefreshLock"/>
+                </StackPanel>
+              </StackPanel>
+            </Border>
+          </UniformGrid>
+        </StackPanel>
+      </ScrollViewer>
+
+      <!-- Resolved -->
+      <StackPanel Grid.Row="1" Orientation="Vertical" VerticalAlignment="Center"
+                  IsVisible="{Binding State, Mode=OneWay, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static m:ConflictFileState.Resolved}}">
         <Path Width="64" Height="64" Data="{StaticResource Icons.Check}" Fill="Green"/>
         <TextBlock Margin="0,16,0,8" FontSize="20" FontWeight="Bold" Text="{DynamicResource Text.WorkingCopy.Conflicts.Resolved}" Foreground="{DynamicResource Brush.FG2}" HorizontalAlignment="Center"/>
         <TextBlock Text="{DynamicResource Text.WorkingCopy.CanStageTip}" Foreground="{DynamicResource Brush.FG2}" HorizontalAlignment="Center"/>
