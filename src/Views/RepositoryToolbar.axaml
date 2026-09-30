@@ -62,11 +62,47 @@
       <Setter Property="VerticalAlignment" Value="Top"/>
       <Setter Property="Fill" Value="{DynamicResource Brush.Accent}"/>
     </Style>
+    <!-- Smaller variant for less frequent tools -->
+    <Style Selector="Button.tool.small">
+      <Setter Property="MinWidth" Value="44"/>
+      <Setter Property="Padding" Value="5,6,5,5"/>
+    </Style>
+    <Style Selector="Button.tool.small Path.tool_icon">
+      <Setter Property="Width" Value="15"/>
+      <Setter Property="Height" Value="15"/>
+      <Setter Property="Margin" Value="0,1,0,2"/>
+    </Style>
+    <Style Selector="Button.tool.small TextBlock.tool_label">
+      <Setter Property="FontSize" Value="10"/>
+    </Style>
+    <!-- Tooltips: title, what it does, shortcut -->
+    <Style Selector="StackPanel.tip">
+      <Setter Property="MaxWidth" Value="300"/>
+      <Setter Property="Spacing" Value="4"/>
+    </Style>
+    <Style Selector="StackPanel.tip TextBlock.tip_title">
+      <Setter Property="FontWeight" Value="SemiBold"/>
+    </Style>
+    <Style Selector="StackPanel.tip TextBlock.tip_desc">
+      <Setter Property="TextWrapping" Value="Wrap"/>
+      <Setter Property="Foreground" Value="{DynamicResource Brush.FG2}"/>
+    </Style>
+    <Style Selector="StackPanel.tip TextBlock.tip_key">
+      <Setter Property="FontSize" Value="11"/>
+      <Setter Property="Margin" Value="0,2,0,0"/>
+      <Setter Property="Foreground" Value="{DynamicResource MenuFlyoutItemKeyboardAcceleratorTextForeground}"/>
+    </Style>
   </UserControl.Styles>
 
   <Grid ColumnDefinitions="Auto,*,0,Auto" Margin="8,0">
     <StackPanel Grid.Column="0" Orientation="Horizontal">
-      <Button Classes="tool" Click="OpenWithExternalTools" ToolTip.Tip="{DynamicResource Text.Repository.OpenWithExternalTools}">
+      <Button Classes="tool" Click="OpenWithExternalTools">
+        <ToolTip.Tip>
+          <StackPanel Classes="tip">
+            <TextBlock Classes="tip_title" Text="Open in"/>
+            <TextBlock Classes="tip_desc" Text="Open the repository folder in File Explorer, a terminal, or an installed editor / IDE."/>
+          </StackPanel>
+        </ToolTip.Tip>
         <StackPanel>
           <Path Classes="tool_icon" Data="{StaticResource Icons.OpenWith}"/>
           <TextBlock Classes="tool_label" Text="Open in"/>
@@ -77,9 +113,10 @@
 
       <Button Classes="tool" Tapped="Fetch">
         <ToolTip.Tip>
-          <StackPanel Orientation="Vertical">
-            <TextBlock Text="{DynamicResource Text.Fetch}"/>
-            <TextBlock Classes="small italic" Margin="0,4,0,0" Text="{DynamicResource Text.CtrlClickTip}" Foreground="{DynamicResource Brush.FG2}"/>
+          <StackPanel Classes="tip">
+            <TextBlock Classes="tip_title" Text="{DynamicResource Text.Fetch}"/>
+            <TextBlock Classes="tip_desc" Text="Download new commits, branches and tags from the remote. Your files and branches are not changed."/>
+            <TextBlock Classes="tip_key" Text="{DynamicResource Text.CtrlClickTip}"/>
           </StackPanel>
         </ToolTip.Tip>
         <StackPanel>
@@ -90,9 +127,10 @@
 
       <Button Classes="tool" Tapped="Pull" IsVisible="{Binding !IsBare}" IsEnabled="{Binding !IsBare}">
         <ToolTip.Tip>
-          <StackPanel Orientation="Vertical">
-            <TextBlock Text="{DynamicResource Text.Pull}"/>
-            <TextBlock Classes="small italic" Margin="0,4,0,0" Text="{DynamicResource Text.CtrlClickTip}" Foreground="{DynamicResource Brush.FG2}"/>
+          <StackPanel Classes="tip">
+            <TextBlock Classes="tip_title" Text="{DynamicResource Text.Pull}"/>
+            <TextBlock Classes="tip_desc" Text="Fetch the upstream branch and merge (or rebase) it into the current branch. A dot on the icon means the remote has new commits."/>
+            <TextBlock Classes="tip_key" Text="{DynamicResource Text.CtrlClickTip}"/>
           </StackPanel>
         </ToolTip.Tip>
         <StackPanel>
@@ -106,9 +144,10 @@
 
       <Button Classes="tool" Tapped="Push">
         <ToolTip.Tip>
-          <StackPanel Orientation="Vertical">
-            <TextBlock Text="{DynamicResource Text.Push}"/>
-            <TextBlock Classes="small italic" Margin="0,4,0,0" Text="{DynamicResource Text.CtrlClickTip}" Foreground="{DynamicResource Brush.FG2}"/>
+          <StackPanel Classes="tip">
+            <TextBlock Classes="tip_title" Text="{DynamicResource Text.Push}"/>
+            <TextBlock Classes="tip_desc" Text="Upload the commits of the current branch to the remote. A dot on the icon means you have local commits that are not pushed yet."/>
+            <TextBlock Classes="tip_key" Text="{DynamicResource Text.CtrlClickTip}"/>
           </StackPanel>
         </ToolTip.Tip>
         <StackPanel>
@@ -124,9 +163,10 @@
 
       <Button Classes="tool" Tapped="StashAll" IsVisible="{Binding !IsBare}">
         <ToolTip.Tip>
-          <StackPanel Orientation="Vertical">
-            <TextBlock Text="{DynamicResource Text.Stash}"/>
-            <TextBlock Classes="small italic" Margin="0,4,0,0" Text="{DynamicResource Text.CtrlClickTip}" Foreground="{DynamicResource Brush.FG2}"/>
+          <StackPanel Classes="tip">
+            <TextBlock Classes="tip_title" Text="{DynamicResource Text.Stash}"/>
+            <TextBlock Classes="tip_desc" Text="Put your uncommitted changes aside and clean the working copy. Bring them back later from Stashes."/>
+            <TextBlock Classes="tip_key" Text="{DynamicResource Text.CtrlClickTip}"/>
           </StackPanel>
         </ToolTip.Tip>
         <StackPanel>
@@ -135,7 +175,13 @@
         </StackPanel>
       </Button>
 
-      <Button Classes="tool" Command="{Binding ApplyPatch}" IsVisible="{Binding !IsBare}" ToolTip.Tip="{DynamicResource Text.Apply.Title}">
+      <Button Classes="tool" Command="{Binding ApplyPatch}" IsVisible="{Binding !IsBare}">
+        <ToolTip.Tip>
+          <StackPanel Classes="tip">
+            <TextBlock Classes="tip_title" Text="{DynamicResource Text.Apply.Title}"/>
+            <TextBlock Classes="tip_desc" Text="Apply a .patch / .diff file to the working copy."/>
+          </StackPanel>
+        </ToolTip.Tip>
         <StackPanel>
           <Path Classes="tool_icon" Data="{StaticResource Icons.ApplyPatch}"/>
           <TextBlock Classes="tool_label" Text="Patch"/>
@@ -146,11 +192,11 @@
 
       <Button Classes="tool" Command="{Binding CreateNewBranch}" HotKey="{OnPlatform Ctrl+B, macOS=⌘+B}">
         <ToolTip.Tip>
-          <TextBlock>
-            <Run Text="{DynamicResource Text.Repository.NewBranch}"/>
-            <Run Text=" "/>
-            <Run Text="{OnPlatform Ctrl+B, macOS=⌘+B}" FontSize="11" Foreground="{DynamicResource MenuFlyoutItemKeyboardAcceleratorTextForeground}"/>
-          </TextBlock>
+          <StackPanel Classes="tip">
+            <TextBlock Classes="tip_title" Text="{DynamicResource Text.Repository.NewBranch}"/>
+            <TextBlock Classes="tip_desc" Text="Create a new branch from the current commit, optionally switching to it."/>
+            <TextBlock Classes="tip_key" Text="{OnPlatform Ctrl+B, macOS=⌘+B}"/>
+          </StackPanel>
         </ToolTip.Tip>
         <StackPanel>
           <Path Classes="tool_icon" Data="{StaticResource Icons.Branch.Add}"/>
@@ -158,7 +204,14 @@
         </StackPanel>
       </Button>
 
-      <Button Classes="tool" Click="OpenTerminal" ToolTip.Tip="{DynamicResource Text.Repository.Terminal}">
+      <Button Classes="tool" Click="OpenTerminal">
+        <ToolTip.Tip>
+          <StackPanel Classes="tip">
+            <TextBlock Classes="tip_title" Text="{DynamicResource Text.Repository.Terminal}"/>
+            <TextBlock Classes="tip_desc" Text="Open a terminal in the repository folder (set the shell in Preferences)."/>
+            <TextBlock Classes="tip_key" Text="{OnPlatform Ctrl+`, macOS=⌃+`}"/>
+          </StackPanel>
+        </ToolTip.Tip>
         <StackPanel>
           <Path Classes="tool_icon" Data="{StaticResource Icons.Terminal}"/>
           <TextBlock Classes="tool_label" Text="Terminal"/>
@@ -167,27 +220,96 @@
 
       <Rectangle Classes="tool_sep"/>
 
-      <!-- Less frequent tools: icon only -->
-      <Button Classes="icon_button" Width="30" Click="OpenGitLFSMenu" IsVisible="{Binding !IsBare}" ToolTip.Tip="{DynamicResource Text.GitLFS}">
-        <Path Width="15" Height="15" Data="{StaticResource Icons.LFS}"/>
+      <!-- Less frequent tools: smaller icons, still labeled -->
+      <Button Classes="tool small" Click="OpenGitLFSMenu" IsVisible="{Binding !IsBare}">
+        <ToolTip.Tip>
+          <StackPanel Classes="tip">
+            <TextBlock Classes="tip_title" Text="{DynamicResource Text.GitLFS}"/>
+            <TextBlock Classes="tip_desc" Text="Large files: track file patterns, fetch / pull / push LFS objects, prune the local cache and manage file locks."/>
+          </StackPanel>
+        </ToolTip.Tip>
+        <StackPanel>
+          <Path Classes="tool_icon" Data="{StaticResource Icons.LFS}"/>
+          <TextBlock Classes="tool_label" Text="LFS"/>
+        </StackPanel>
       </Button>
-      <Button Classes="icon_button" Width="30" Click="OpenGitFlowMenu" IsVisible="{Binding !IsBare}" ToolTip.Tip="{DynamicResource Text.GitFlow}">
-        <Path Width="15" Height="15" Data="{StaticResource Icons.GitFlow}"/>
+
+      <Button Classes="tool small" Click="OpenGitFlowMenu" IsVisible="{Binding !IsBare}">
+        <ToolTip.Tip>
+          <StackPanel Classes="tip">
+            <TextBlock Classes="tip_title" Text="{DynamicResource Text.GitFlow}"/>
+            <TextBlock Classes="tip_desc" Text="Start and finish feature, release and hotfix branches with the git-flow workflow."/>
+          </StackPanel>
+        </ToolTip.Tip>
+        <StackPanel>
+          <Path Classes="tool_icon" Data="{StaticResource Icons.GitFlow}"/>
+          <TextBlock Classes="tool_label" Text="Git-Flow"/>
+        </StackPanel>
       </Button>
-      <Button Classes="icon_button" Width="30" Click="StartBisect" IsVisible="{Binding !IsBare}" ToolTip.Tip="{DynamicResource Text.Bisect}">
-        <Path Width="15" Height="15" Data="{StaticResource Icons.Bisect}"/>
+
+      <Button Classes="tool small" Click="StartBisect" IsVisible="{Binding !IsBare}">
+        <ToolTip.Tip>
+          <StackPanel Classes="tip">
+            <TextBlock Classes="tip_title" Text="{DynamicResource Text.Bisect}"/>
+            <TextBlock Classes="tip_desc" Text="Find the commit that introduced a bug: mark commits as good or bad and git halves the range until one commit is left."/>
+          </StackPanel>
+        </ToolTip.Tip>
+        <StackPanel>
+          <Path Classes="tool_icon" Data="{StaticResource Icons.Bisect}"/>
+          <TextBlock Classes="tool_label" Text="Bisect"/>
+        </StackPanel>
       </Button>
-      <Button Classes="icon_button" Width="30" Click="OpenCustomActionMenu" ToolTip.Tip="{DynamicResource Text.Repository.CustomActions}">
-        <Path Width="15" Height="15" Data="{StaticResource Icons.Action}"/>
+
+      <Button Classes="tool small" Click="OpenCustomActionMenu">
+        <ToolTip.Tip>
+          <StackPanel Classes="tip">
+            <TextBlock Classes="tip_title" Text="{DynamicResource Text.Repository.CustomActions}"/>
+            <TextBlock Classes="tip_desc" Text="Run your own commands or scripts for this repository. Define them in Configure this repository › Custom Action."/>
+          </StackPanel>
+        </ToolTip.Tip>
+        <StackPanel>
+          <Path Classes="tool_icon" Data="{StaticResource Icons.Action}"/>
+          <TextBlock Classes="tool_label" Text="Actions"/>
+        </StackPanel>
       </Button>
-      <Button Classes="icon_button" Width="30" Click="Cleanup" ToolTip.Tip="{DynamicResource Text.Repository.Clean}">
-        <Path Width="15" Height="15" Data="{StaticResource Icons.Clean}"/>
+
+      <Button Classes="tool small" Click="Cleanup">
+        <ToolTip.Tip>
+          <StackPanel Classes="tip">
+            <TextBlock Classes="tip_title" Text="{DynamicResource Text.Repository.Clean}"/>
+            <TextBlock Classes="tip_desc" Text="Run git gc and prune: compress the repository and remove unreachable objects. Can take a while on large repositories."/>
+          </StackPanel>
+        </ToolTip.Tip>
+        <StackPanel>
+          <Path Classes="tool_icon" Data="{StaticResource Icons.Clean}"/>
+          <TextBlock Classes="tool_label" Text="Cleanup"/>
+        </StackPanel>
       </Button>
-      <Button Classes="icon_button" Width="30" Click="OpenGitLogs" ToolTip.Tip="{DynamicResource Text.Repository.ViewLogs}">
-        <Path Width="15" Height="15" Data="{StaticResource Icons.Logs}"/>
+
+      <Button Classes="tool small" Click="OpenGitLogs">
+        <ToolTip.Tip>
+          <StackPanel Classes="tip">
+            <TextBlock Classes="tip_title" Text="{DynamicResource Text.Repository.ViewLogs}"/>
+            <TextBlock Classes="tip_desc" Text="Show the git commands this app has run in this repository and their output. Useful when something fails."/>
+          </StackPanel>
+        </ToolTip.Tip>
+        <StackPanel>
+          <Path Classes="tool_icon" Data="{StaticResource Icons.Logs}"/>
+          <TextBlock Classes="tool_label" Text="Logs"/>
+        </StackPanel>
       </Button>
-      <Button Classes="icon_button" Width="30" Click="OpenStatistics" ToolTip.Tip="{DynamicResource Text.Repository.Statistics}">
-        <Path Width="14" Height="14" Data="{StaticResource Icons.Statistics}"/>
+
+      <Button Classes="tool small" Click="OpenStatistics">
+        <ToolTip.Tip>
+          <StackPanel Classes="tip">
+            <TextBlock Classes="tip_title" Text="{DynamicResource Text.Repository.Statistics}"/>
+            <TextBlock Classes="tip_desc" Text="Commit activity by author and over time (week, month, year)."/>
+          </StackPanel>
+        </ToolTip.Tip>
+        <StackPanel>
+          <Path Classes="tool_icon" Data="{StaticResource Icons.Statistics}"/>
+          <TextBlock Classes="tool_label" Text="Stats"/>
+        </StackPanel>
       </Button>
     </StackPanel>
 
@@ -228,7 +350,8 @@
               BorderBrush="{DynamicResource Brush.Border2}"
               Background="{DynamicResource Brush.Contents}"
               HorizontalContentAlignment="Stretch"
-              Click="OpenCommitSearch">
+              Click="OpenCommitSearch"
+              ToolTip.Tip="Search commits by message, author, SHA, file path or content">
         <Grid ColumnDefinitions="Auto,*,Auto" VerticalAlignment="Center">
           <Path Grid.Column="0" Width="13" Height="13" Data="{StaticResource Icons.Search}" Fill="{DynamicResource Brush.FG2}"/>
           <TextBlock Grid.Column="1" Margin="6,0,0,0" Text="Search commits" Foreground="{DynamicResource Brush.FG2}"/>
