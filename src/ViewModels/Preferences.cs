@@ -129,6 +129,13 @@ namespace SourceGit.ViewModels
             set;
         } = false;
 
+        // MyGitGUI: tint branch names in the sidebar with their commit-graph lane color.
+        public bool ColorBranchesByGraph
+        {
+            get => _colorBranchesByGraph;
+            set => SetProperty(ref _colorBranchesByGraph, value);
+        }
+
         public int MaxHistoryCommits
         {
             get => _maxHistoryCommits;
@@ -830,6 +837,7 @@ namespace SourceGit.ViewModels
         private string _ignoreUpdateTag = string.Empty;
 
         private bool _showTagsInGraph = true;
+        private bool _colorBranchesByGraph = true;
         private bool _useTwoColumnsLayoutInHistories = false;
         private bool _displayTimeAsPeriodInHistories = false;
         private bool _useSideBySideDiff = false;

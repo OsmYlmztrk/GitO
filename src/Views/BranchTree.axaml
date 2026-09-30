@@ -164,6 +164,13 @@
               <TextBlock Grid.Column="1"
                          FontWeight="{Binding IsCurrent, Converter={x:Static c:BoolConverters.IsBoldToFontWeight}}"
                          TextTrimming="CharacterEllipsis">
+                <TextBlock.Foreground>
+                  <MultiBinding Converter="{x:Static c:BranchConverters.ToGraphBrush}">
+                    <Binding Path="Backend"/>
+                    <Binding Path="$parent[v:BranchTree].HeadColors"/>
+                    <Binding Source="{x:Static vm:Preferences.Instance}" Path="ColorBranchesByGraph"/>
+                  </MultiBinding>
+                </TextBlock.Foreground>
                 <Run Text="{Binding Name}"/>
                 <Run Text="{Binding BranchesCount}" Foreground="{DynamicResource Brush.FG2}"/>
               </TextBlock>

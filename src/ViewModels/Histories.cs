@@ -119,6 +119,12 @@ namespace SourceGit.ViewModels
             set => SetProperty(ref _graph, value);
         }
 
+        public IReadOnlyDictionary<string, int> HeadColors
+        {
+            get => _headColors;
+            private set => SetProperty(ref _headColors, value);
+        }
+
         public Models.CommitGraphHighlighting GraphHighlighting
         {
             get => _repo.UIStates.GraphHighlighting;
@@ -575,6 +581,14 @@ namespace SourceGit.ViewModels
             }
 
             Graph = Models.CommitGraph.Generate(commits, firstParentOnly, highlighting, extraHeads);
+
+            var headColors = new Dictionary<string, int>(StringComparer.Ordinal);
+            foreach (var c in commits)
+            {
+                if (c.HasDecorators)
+                    headColors.TryAdd(c.SHA, c.Color);
+            }
+            HeadColors = headColors;
         }
 
         private Repository _repo = null;
@@ -584,6 +598,7 @@ namespace SourceGit.ViewModels
         private bool _isLoading = true;
         private List<Models.Commit> _commits = [];
         private Models.CommitGraph _graph = null;
+        private IReadOnlyDictionary<string, int> _headColors = null;
         private List<Models.Commit> _selectedCommits = [];
         private Models.Bisect _bisect = null;
         private object _detailContext = Models.Null.Instance;

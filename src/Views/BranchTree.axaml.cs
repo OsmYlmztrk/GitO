@@ -271,6 +271,18 @@ namespace SourceGit.Views
 
     public partial class BranchTree : UserControl
     {
+        public static readonly StyledProperty<IReadOnlyDictionary<string, int>> HeadColorsProperty =
+            AvaloniaProperty.Register<BranchTree, IReadOnlyDictionary<string, int>>(nameof(HeadColors));
+
+        /// <summary>
+        ///     MyGitGUI: head SHA -> commit-graph lane color, used to tint branch names.
+        /// </summary>
+        public IReadOnlyDictionary<string, int> HeadColors
+        {
+            get => GetValue(HeadColorsProperty);
+            set => SetValue(HeadColorsProperty, value);
+        }
+
         public static readonly DirectProperty<BranchTree, List<ViewModels.BranchTreeNode>> NodesProperty =
             AvaloniaProperty.RegisterDirect<BranchTree, List<ViewModels.BranchTreeNode>>(
                 nameof(Nodes),

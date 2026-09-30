@@ -310,6 +310,7 @@
                 </ToggleButton>
                 <v:BranchTree Grid.Row="1"
                               x:Name="LocalBranchTree"
+                              HeadColors="{Binding Histories.HeadColors, Mode=OneWay}"
                               Height="0"
                               Margin="6,0,4,0"
                               Nodes="{Binding LocalBranchTrees}"
@@ -344,6 +345,7 @@
                 </ToggleButton>
                 <v:BranchTree Grid.Row="3"
                               x:Name="RemoteBranchTree"
+                              HeadColors="{Binding Histories.HeadColors, Mode=OneWay}"
                               Height="0"
                               Margin="6,0,4,0"
                               Nodes="{Binding RemoteBranchTrees}"
