@@ -99,8 +99,8 @@
       <Button Classes="tool" Click="OpenWithExternalTools">
         <ToolTip.Tip>
           <StackPanel Classes="tip">
-            <TextBlock Classes="tip_title" Text="Open in"/>
-            <TextBlock Classes="tip_desc" Text="Open the repository folder in File Explorer, a terminal, or an installed editor / IDE."/>
+            <TextBlock Classes="tip_title" Text="Şurada aç"/>
+            <TextBlock Classes="tip_desc" Text="Repo klasörünü Dosya Gezgini, terminal ya da yüklü bir editör / IDE ile açar."/>
           </StackPanel>
         </ToolTip.Tip>
         <StackPanel>
@@ -114,9 +114,9 @@
       <Button Classes="tool" Tapped="Fetch">
         <ToolTip.Tip>
           <StackPanel Classes="tip">
-            <TextBlock Classes="tip_title" Text="{DynamicResource Text.Fetch}"/>
-            <TextBlock Classes="tip_desc" Text="Download new commits, branches and tags from the remote. Your files and branches are not changed."/>
-            <TextBlock Classes="tip_key" Text="{DynamicResource Text.CtrlClickTip}"/>
+            <TextBlock Classes="tip_title" Text="Fetch (Getir)"/>
+            <TextBlock Classes="tip_desc" Text="Remote'taki yeni commit, branch ve tag'leri indirir. Dosyalarına ve branch'lerine dokunmaz."/>
+            <TextBlock Classes="tip_key" Text="Ctrl ile tıklarsan pencere açmadan doğrudan başlar"/>
           </StackPanel>
         </ToolTip.Tip>
         <StackPanel>
@@ -128,9 +128,9 @@
       <Button Classes="tool" Tapped="Pull" IsVisible="{Binding !IsBare}" IsEnabled="{Binding !IsBare}">
         <ToolTip.Tip>
           <StackPanel Classes="tip">
-            <TextBlock Classes="tip_title" Text="{DynamicResource Text.Pull}"/>
-            <TextBlock Classes="tip_desc" Text="Fetch the upstream branch and merge (or rebase) it into the current branch. A dot on the icon means the remote has new commits."/>
-            <TextBlock Classes="tip_key" Text="{DynamicResource Text.CtrlClickTip}"/>
+            <TextBlock Classes="tip_title" Text="Pull (Çek)"/>
+            <TextBlock Classes="tip_desc" Text="Takip edilen remote branch'i indirip mevcut branch'e merge (ya da rebase) eder. İkondaki nokta, remote'ta çekilecek yeni commit olduğunu gösterir."/>
+            <TextBlock Classes="tip_key" Text="Ctrl ile tıklarsan pencere açmadan doğrudan başlar"/>
           </StackPanel>
         </ToolTip.Tip>
         <StackPanel>
@@ -145,9 +145,9 @@
       <Button Classes="tool" Tapped="Push">
         <ToolTip.Tip>
           <StackPanel Classes="tip">
-            <TextBlock Classes="tip_title" Text="{DynamicResource Text.Push}"/>
-            <TextBlock Classes="tip_desc" Text="Upload the commits of the current branch to the remote. A dot on the icon means you have local commits that are not pushed yet."/>
-            <TextBlock Classes="tip_key" Text="{DynamicResource Text.CtrlClickTip}"/>
+            <TextBlock Classes="tip_title" Text="Push (Gönder)"/>
+            <TextBlock Classes="tip_desc" Text="Mevcut branch'teki commit'leri remote'a yükler. İkondaki nokta, henüz gönderilmemiş yerel commit'lerin olduğunu gösterir."/>
+            <TextBlock Classes="tip_key" Text="Ctrl ile tıklarsan pencere açmadan doğrudan başlar"/>
           </StackPanel>
         </ToolTip.Tip>
         <StackPanel>
@@ -164,9 +164,9 @@
       <Button Classes="tool" Tapped="StashAll" IsVisible="{Binding !IsBare}">
         <ToolTip.Tip>
           <StackPanel Classes="tip">
-            <TextBlock Classes="tip_title" Text="{DynamicResource Text.Stash}"/>
-            <TextBlock Classes="tip_desc" Text="Put your uncommitted changes aside and clean the working copy. Bring them back later from Stashes."/>
-            <TextBlock Classes="tip_key" Text="{DynamicResource Text.CtrlClickTip}"/>
+            <TextBlock Classes="tip_title" Text="Stash (Kenara koy)"/>
+            <TextBlock Classes="tip_desc" Text="Commit'lenmemiş değişikliklerini kenara kaydeder ve çalışma alanını temizler. Sonra Stashes'tan geri alabilirsin."/>
+            <TextBlock Classes="tip_key" Text="Ctrl ile tıklarsan pencere açmadan doğrudan başlar"/>
           </StackPanel>
         </ToolTip.Tip>
         <StackPanel>
@@ -178,8 +178,8 @@
       <Button Classes="tool" Command="{Binding ApplyPatch}" IsVisible="{Binding !IsBare}">
         <ToolTip.Tip>
           <StackPanel Classes="tip">
-            <TextBlock Classes="tip_title" Text="{DynamicResource Text.Apply.Title}"/>
-            <TextBlock Classes="tip_desc" Text="Apply a .patch / .diff file to the working copy."/>
+            <TextBlock Classes="tip_title" Text="Yama uygula"/>
+            <TextBlock Classes="tip_desc" Text="Bir .patch / .diff dosyasını çalışma alanına uygular."/>
           </StackPanel>
         </ToolTip.Tip>
         <StackPanel>
@@ -193,8 +193,8 @@
       <Button Classes="tool" Command="{Binding CreateNewBranch}" HotKey="{OnPlatform Ctrl+B, macOS=⌘+B}">
         <ToolTip.Tip>
           <StackPanel Classes="tip">
-            <TextBlock Classes="tip_title" Text="{DynamicResource Text.Repository.NewBranch}"/>
-            <TextBlock Classes="tip_desc" Text="Create a new branch from the current commit, optionally switching to it."/>
+            <TextBlock Classes="tip_title" Text="Yeni branch oluştur"/>
+            <TextBlock Classes="tip_desc" Text="Mevcut commit'ten yeni bir branch oluşturur; istersen hemen ona geçer."/>
             <TextBlock Classes="tip_key" Text="{OnPlatform Ctrl+B, macOS=⌘+B}"/>
           </StackPanel>
         </ToolTip.Tip>
@@ -207,8 +207,8 @@
       <Button Classes="tool" Click="OpenTerminal">
         <ToolTip.Tip>
           <StackPanel Classes="tip">
-            <TextBlock Classes="tip_title" Text="{DynamicResource Text.Repository.Terminal}"/>
-            <TextBlock Classes="tip_desc" Text="Open a terminal in the repository folder (set the shell in Preferences)."/>
+            <TextBlock Classes="tip_title" Text="Terminalde aç"/>
+            <TextBlock Classes="tip_desc" Text="Repo klasöründe bir terminal açar (kabuk Preferences ayarlarından seçilir)."/>
             <TextBlock Classes="tip_key" Text="{OnPlatform Ctrl+`, macOS=⌃+`}"/>
           </StackPanel>
         </ToolTip.Tip>
@@ -224,8 +224,8 @@
       <Button Classes="tool small" Click="OpenGitLFSMenu" IsVisible="{Binding !IsBare}">
         <ToolTip.Tip>
           <StackPanel Classes="tip">
-            <TextBlock Classes="tip_title" Text="{DynamicResource Text.GitLFS}"/>
-            <TextBlock Classes="tip_desc" Text="Large files: track file patterns, fetch / pull / push LFS objects, prune the local cache and manage file locks."/>
+            <TextBlock Classes="tip_title" Text="Git LFS (büyük dosyalar)"/>
+            <TextBlock Classes="tip_desc" Text="Büyük dosyalar: dosya kalıplarını takibe alır, LFS nesnelerini fetch / pull / push eder, yerel önbelleği temizler ve dosya kilitlerini yönetir."/>
           </StackPanel>
         </ToolTip.Tip>
         <StackPanel>
@@ -237,8 +237,8 @@
       <Button Classes="tool small" Click="OpenGitFlowMenu" IsVisible="{Binding !IsBare}">
         <ToolTip.Tip>
           <StackPanel Classes="tip">
-            <TextBlock Classes="tip_title" Text="{DynamicResource Text.GitFlow}"/>
-            <TextBlock Classes="tip_desc" Text="Start and finish feature, release and hotfix branches with the git-flow workflow."/>
+            <TextBlock Classes="tip_title" Text="Git-Flow"/>
+            <TextBlock Classes="tip_desc" Text="git-flow iş akışıyla feature, release ve hotfix branch'lerini başlatır ve bitirir."/>
           </StackPanel>
         </ToolTip.Tip>
         <StackPanel>
@@ -250,8 +250,8 @@
       <Button Classes="tool small" Click="StartBisect" IsVisible="{Binding !IsBare}">
         <ToolTip.Tip>
           <StackPanel Classes="tip">
-            <TextBlock Classes="tip_title" Text="{DynamicResource Text.Bisect}"/>
-            <TextBlock Classes="tip_desc" Text="Find the commit that introduced a bug: mark commits as good or bad and git halves the range until one commit is left."/>
+            <TextBlock Classes="tip_title" Text="Bisect (hatalı commit'i bul)"/>
+            <TextBlock Classes="tip_desc" Text="Hatayı getiren commit'i bulur: commit'leri iyi ya da kötü diye işaretlersin, git aralığı her seferinde ikiye bölerek tek commit kalana kadar daraltır."/>
           </StackPanel>
         </ToolTip.Tip>
         <StackPanel>
@@ -263,8 +263,8 @@
       <Button Classes="tool small" Click="OpenCustomActionMenu">
         <ToolTip.Tip>
           <StackPanel Classes="tip">
-            <TextBlock Classes="tip_title" Text="{DynamicResource Text.Repository.CustomActions}"/>
-            <TextBlock Classes="tip_desc" Text="Run your own commands or scripts for this repository. Define them in Configure this repository › Custom Action."/>
+            <TextBlock Classes="tip_title" Text="Özel komutlar"/>
+            <TextBlock Classes="tip_desc" Text="Bu repo için kendi komutlarını ya da script'lerini çalıştırır. Tanımlamak için: Configure this repository › Custom Action."/>
           </StackPanel>
         </ToolTip.Tip>
         <StackPanel>
@@ -276,8 +276,8 @@
       <Button Classes="tool small" Click="Cleanup">
         <ToolTip.Tip>
           <StackPanel Classes="tip">
-            <TextBlock Classes="tip_title" Text="{DynamicResource Text.Repository.Clean}"/>
-            <TextBlock Classes="tip_desc" Text="Run git gc and prune: compress the repository and remove unreachable objects. Can take a while on large repositories."/>
+            <TextBlock Classes="tip_title" Text="Temizlik (GC ve Prune)"/>
+            <TextBlock Classes="tip_desc" Text="git gc ve prune çalıştırır: repoyu sıkıştırır, artık erişilemeyen nesneleri siler. Büyük repolarda uzun sürebilir."/>
           </StackPanel>
         </ToolTip.Tip>
         <StackPanel>
@@ -289,8 +289,8 @@
       <Button Classes="tool small" Click="OpenGitLogs">
         <ToolTip.Tip>
           <StackPanel Classes="tip">
-            <TextBlock Classes="tip_title" Text="{DynamicResource Text.Repository.ViewLogs}"/>
-            <TextBlock Classes="tip_desc" Text="Show the git commands this app has run in this repository and their output. Useful when something fails."/>
+            <TextBlock Classes="tip_title" Text="Komut kayıtları"/>
+            <TextBlock Classes="tip_desc" Text="Uygulamanın bu repoda çalıştırdığı git komutlarını ve çıktılarını gösterir. Bir şey ters gittiğinde işe yarar."/>
           </StackPanel>
         </ToolTip.Tip>
         <StackPanel>
@@ -302,8 +302,8 @@
       <Button Classes="tool small" Click="OpenStatistics">
         <ToolTip.Tip>
           <StackPanel Classes="tip">
-            <TextBlock Classes="tip_title" Text="{DynamicResource Text.Repository.Statistics}"/>
-            <TextBlock Classes="tip_desc" Text="Commit activity by author and over time (week, month, year)."/>
+            <TextBlock Classes="tip_title" Text="İstatistikler"/>
+            <TextBlock Classes="tip_desc" Text="Yazara ve zamana göre (hafta, ay, yıl) commit istatistikleri."/>
           </StackPanel>
         </ToolTip.Tip>
         <StackPanel>
@@ -351,7 +351,7 @@
               Background="{DynamicResource Brush.Contents}"
               HorizontalContentAlignment="Stretch"
               Click="OpenCommitSearch"
-              ToolTip.Tip="Search commits by message, author, SHA, file path or content">
+              ToolTip.Tip="Commit'lerde mesaja, yazara, SHA'ya, dosya yoluna ya da içeriğe göre arama yapar">
         <Grid ColumnDefinitions="Auto,*,Auto" VerticalAlignment="Center">
           <Path Grid.Column="0" Width="13" Height="13" Data="{StaticResource Icons.Search}" Fill="{DynamicResource Brush.FG2}"/>
           <TextBlock Grid.Column="1" Margin="6,0,0,0" Text="Search commits" Foreground="{DynamicResource Brush.FG2}"/>
