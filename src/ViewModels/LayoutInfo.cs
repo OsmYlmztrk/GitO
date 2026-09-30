@@ -39,7 +39,7 @@ namespace SourceGit.ViewModels
         {
             get;
             set;
-        } = 250;
+        } = 260;
 
         public double RepositorySearchCommitWidth
         {
@@ -77,10 +77,10 @@ namespace SourceGit.ViewModels
             set => SetProperty(ref _commitDetailFilesLeftWidth, value);
         }
 
-        private GridLength _workingCopyLeftWidth = new GridLength(300, GridUnitType.Pixel);
+        private GridLength _workingCopyLeftWidth = new GridLength(440, GridUnitType.Pixel);
         private GridLength _stashesLeftWidth = new GridLength(300, GridUnitType.Pixel);
-        private GridLength _commitDetailChangesLeftWidth = new GridLength(256, GridUnitType.Pixel);
-        private GridLength _commitDetailFilesLeftWidth = new GridLength(256, GridUnitType.Pixel);
+        private GridLength _commitDetailChangesLeftWidth = new GridLength(440, GridUnitType.Pixel);
+        private GridLength _commitDetailFilesLeftWidth = new GridLength(300, GridUnitType.Pixel);
         private bool _isSidebarCollapsedInLocalChanges = false;
     }
 }

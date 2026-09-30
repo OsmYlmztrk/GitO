@@ -21,7 +21,7 @@ namespace SourceGit.ViewModels
 
         public CommitDetailSharedData()
         {
-            ActiveTabIndex = Preferences.Instance.ShowChangesInCommitDetailByDefault ? 1 : 0;
+            ActiveTabIndex = 0; // MyGitGUI: the Commit tab (header + files + diff) is always the default
         }
     }
 
@@ -541,7 +541,7 @@ namespace SourceGit.ViewModels
 
         private void UpdateDetails()
         {
-            if (ActiveTabIndex == 1 && _changeSelection is { Count: 1, HasFolder: false })
+            if (ActiveTabIndex is 0 or 1 && _changeSelection is { Count: 1, HasFolder: false })
                 DiffContext = new DiffContext(_repo.FullPath, new Models.DiffOption(_commit, _changeSelection.Changes[0]), _diffContext);
             else
                 DiffContext = null;

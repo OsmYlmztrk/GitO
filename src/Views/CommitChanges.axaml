@@ -5,8 +5,10 @@
              xmlns:vm="using:SourceGit.ViewModels"
              xmlns:v="using:SourceGit.Views"
              mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
+             xmlns:c="using:SourceGit.Converters"
              x:Class="SourceGit.Views.CommitChanges"
-             x:DataType="vm:CommitDetail">
+             x:DataType="vm:CommitDetail"
+             x:Name="ThisControl">
   <Grid>
     <Grid.ColumnDefinitions>
       <ColumnDefinition Width="{Binding Source={x:Static vm:Preferences.Instance}, Path=Layout.CommitDetailChangesLeftWidth, Mode=TwoWay}" MinWidth="200"/>
@@ -14,9 +16,47 @@
       <ColumnDefinition Width="*" MinWidth="100"/>
     </Grid.ColumnDefinitions>
 
-    <Grid Grid.Column="0" RowDefinitions="26,*,26">
+    <Grid Grid.Column="0" RowDefinitions="Auto,26,*,26">
+      <!-- Compact commit header (MyGitGUI, Fork-style) -->
+      <Border Grid.Row="0"
+              Margin="0,0,0,6"
+              Padding="4,2,4,8"
+              BorderThickness="0,0,0,1"
+              BorderBrush="{DynamicResource Brush.Border2}"
+              IsVisible="{Binding #ThisControl.IsCommitInfoVisible}">
+        <StackPanel Orientation="Vertical" Spacing="6">
+          <Grid ColumnDefinitions="Auto,*,Auto">
+            <v:Avatar Grid.Column="0" Width="32" Height="32" VerticalAlignment="Center" User="{Binding Commit.Author}"/>
+            <StackPanel Grid.Column="1" Margin="10,0,8,0" VerticalAlignment="Center">
+              <TextBlock Text="{Binding Commit.Author.Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+              <TextBlock Text="{Binding Commit.Author.Email}" FontSize="11" Foreground="{DynamicResource Brush.FG2}" TextTrimming="CharacterEllipsis"/>
+            </StackPanel>
+            <v:DateTimePresenter Grid.Column="2"
+                                 VerticalAlignment="Center"
+                                 FontSize="11"
+                                 Timestamp="{Binding Commit.AuthorTime}"
+                                 Foreground="{DynamicResource Brush.FG2}"/>
+          </Grid>
+
+          <Grid ColumnDefinitions="56,*,Auto">
+            <TextBlock Grid.Column="0" Text="SHA" FontSize="11" Foreground="{DynamicResource Brush.FG2}" VerticalAlignment="Center"/>
+            <SelectableTextBlock Grid.Column="1"
+                                 Text="{Binding Commit.SHA}"
+                                 FontFamily="{DynamicResource Fonts.Monospace}"
+                                 FontSize="11"
+                                 VerticalAlignment="Center"
+                                 TextTrimming="CharacterEllipsis"/>
+            <v:CopyButton Grid.Column="2" Width="14" Height="14" Margin="6,0,0,0" CopyText="{Binding Commit.SHA}"/>
+          </Grid>
+
+          <ScrollViewer MaxHeight="96" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+            <SelectableTextBlock Text="{Binding FullMessage.Message}" TextWrapping="Wrap"/>
+          </ScrollViewer>
+        </StackPanel>
+      </Border>
+
       <!-- Search & Display Mode -->
-      <Grid Grid.Row="0" ColumnDefinitions="*,Auto">
+      <Grid Grid.Row="1" ColumnDefinitions="*,Auto">
         <TextBox Grid.Column="0"
                  x:Name="CommitChangeSearchBox"
                  Height="26"
@@ -45,7 +85,7 @@
       </Grid>
 
       <!-- Changes -->
-      <Border Grid.Row="1"
+      <Border Grid.Row="2"
               Margin="0,4,0,0"
               BorderBrush="{DynamicResource Brush.Border2}"
               BorderThickness="1"
@@ -64,7 +104,7 @@
       
 
       <!-- Summary -->
-      <Border Grid.Row="2" CornerRadius="0,0,4,4" BorderBrush="{DynamicResource Brush.Border2}" BorderThickness="1,0,1,1" Background="Transparent">
+      <Border Grid.Row="3" CornerRadius="0,0,4,4" BorderBrush="{DynamicResource Brush.Border2}" BorderThickness="1,0,1,1" Background="Transparent">
         <TextBlock Margin="4,0,0,0"
                    Foreground="{DynamicResource Brush.FG2}"
                    HorizontalAlignment="Left" VerticalAlignment="Center">

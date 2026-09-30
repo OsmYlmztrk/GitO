@@ -11,7 +11,38 @@
              x:DataType="vm:CommitDetail"
              x:Name="ThisControl">
   <TabControl SelectedIndex="{Binding ActiveTabIndex, Mode=TwoWay}" Padding="0,4">
-    <!-- Information Page -->
+    <!-- Commit Page (MyGitGUI): commit header + changed files + diff, like Fork -->
+    <TabItem>
+      <TabItem.Header>
+        <Border Background="Transparent" PointerPressed="OnTabHeaderPointerPressed">
+          <TextBlock Classes="tab_header" Text="Commit"/>
+        </Border>
+      </TabItem.Header>
+      <v:CommitChanges Margin="4,0"
+                       IsCommitInfoVisible="True"
+                       IsVisible="{Binding #ThisControl.IsDetailsPanelExpanded, Mode=OneWay}"/>
+    </TabItem>
+
+    <TabItem>
+      <TabItem.Header>
+        <Border Background="Transparent" PointerPressed="OnTabHeaderPointerPressed">
+          <TextBlock Classes="tab_header" Text="{DynamicResource Text.CommitDetail.Changes}"/>
+        </Border>
+      </TabItem.Header>
+      <v:CommitChanges Margin="4,0"
+                       IsVisible="{Binding #ThisControl.IsDetailsPanelExpanded, Mode=OneWay}"/>
+    </TabItem>
+
+    <TabItem>
+      <TabItem.Header>
+        <Border Background="Transparent" PointerPressed="OnTabHeaderPointerPressed">
+          <TextBlock Classes="tab_header" Text="{DynamicResource Text.CommitDetail.Files}"/>
+        </Border>
+      </TabItem.Header>
+      <v:RevisionFiles Margin="4,0"
+                       IsVisible="{Binding #ThisControl.IsDetailsPanelExpanded, Mode=OneWay}"/>
+    </TabItem>
+    <!-- Details Page (full SourceGit information view) -->
     <TabItem>
       <TabItem.Header>
         <Border Background="Transparent" PointerPressed="OnTabHeaderPointerPressed">
@@ -85,24 +116,5 @@
       </ScrollViewer>
     </TabItem>
 
-    <TabItem>
-      <TabItem.Header>
-        <Border Background="Transparent" PointerPressed="OnTabHeaderPointerPressed">
-          <TextBlock Classes="tab_header" Text="{DynamicResource Text.CommitDetail.Changes}"/>
-        </Border>
-      </TabItem.Header>
-      <v:CommitChanges Margin="4,0"
-                       IsVisible="{Binding #ThisControl.IsDetailsPanelExpanded, Mode=OneWay}"/>
-    </TabItem>
-
-    <TabItem>
-      <TabItem.Header>
-        <Border Background="Transparent" PointerPressed="OnTabHeaderPointerPressed">
-          <TextBlock Classes="tab_header" Text="{DynamicResource Text.CommitDetail.Files}"/>
-        </Border>
-      </TabItem.Header>
-      <v:RevisionFiles Margin="4,0"
-                       IsVisible="{Binding #ThisControl.IsDetailsPanelExpanded, Mode=OneWay}"/>
-    </TabItem>
   </TabControl>
 </UserControl>

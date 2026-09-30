@@ -32,7 +32,7 @@
                              TotalCommits="{Binding Commits.Count, Mode=OneWay}"
                              SelectedCommits="{Binding SelectedCommits, Mode=TwoWay}"
                              ColumnHeaderHeight="24"
-                             RowHeight="26"
+                             RowHeight="24"
                              LayoutUpdated="OnCommitListLayoutUpdated"
                              ContextRequested="OnCommitListContextRequested"
                              DoubleTapped="OnCommitListDoubleTapped">
@@ -137,7 +137,7 @@
                                            HasSingleRemote="{Binding $parent[v:Histories].HasSingleRemote}"/>
 
                     <v:CommitSubjectPresenter Grid.Column="3"
-                                              Height="26"
+                                              Height="24"
                                               FontFamily="{DynamicResource Fonts.Default}"
                                               CodeFontFamily="{DynamicResource Fonts.Monospace}"
                                               InlineCodeBackground="{DynamicResource Brush.InlineCode}"
@@ -182,23 +182,6 @@
             </DataGridTemplateColumn.CellTemplate>
           </DataGridTemplateColumn>
 
-          <DataGridTemplateColumn MinWidth="100" IsReadOnly="True" IsVisible="{Binding IsSHAColumnVisible, Mode=OneWay}">
-            <DataGridTemplateColumn.Header>
-              <TextBlock Classes="table_header" Text="{DynamicResource Text.Histories.Header.SHA}" HorizontalAlignment="Center"/>
-            </DataGridTemplateColumn.Header>
-
-            <DataGridTemplateColumn.CellTemplate>
-              <DataTemplate DataType="m:Commit">
-                <Border Padding="8,0,0,0" Background="Transparent" ClipToBounds="True">
-                  <TextBlock Text="{Binding SHA, Converter={x:Static c:StringConverters.ToShortSHA}}"
-                             FontFamily="{DynamicResource Fonts.Monospace}"
-                             FontWeight="{Binding IsCurrentHead, Converter={x:Static c:BoolConverters.IsBoldToFontWeight}}"
-                             Opacity="{Binding IsMerged, Converter={x:Static c:BoolConverters.IsMergedToOpacity}}"/>
-                </Border>
-              </DataTemplate>
-            </DataGridTemplateColumn.CellTemplate>
-          </DataGridTemplateColumn>
-
           <DataGridTemplateColumn MinWidth="160" IsReadOnly="True" IsVisible="{Binding IsAuthorTimeColumnVisible, Mode=OneWay}">
             <DataGridTemplateColumn.Header>
               <TextBlock Classes="table_header" Text="{DynamicResource Text.Histories.Header.AuthorTime}" HorizontalAlignment="Center"/>
@@ -238,6 +221,23 @@
               </DataTemplate>
             </DataGridTemplateColumn.CellTemplate>
           </DataGridTemplateColumn>
+          <DataGridTemplateColumn MinWidth="80" IsReadOnly="True" IsVisible="{Binding IsSHAColumnVisible, Mode=OneWay}">
+            <DataGridTemplateColumn.Header>
+              <TextBlock Classes="table_header" Text="{DynamicResource Text.Histories.Header.SHA}" HorizontalAlignment="Center"/>
+            </DataGridTemplateColumn.Header>
+
+            <DataGridTemplateColumn.CellTemplate>
+              <DataTemplate DataType="m:Commit">
+                <Border Padding="8,0,0,0" Background="Transparent" ClipToBounds="True">
+                  <TextBlock Text="{Binding SHA, Converter={x:Static c:StringConverters.ToShortSHA}}"
+                             FontFamily="{DynamicResource Fonts.Monospace}"
+                             FontWeight="{Binding IsCurrentHead, Converter={x:Static c:BoolConverters.IsBoldToFontWeight}}"
+                             Opacity="{Binding IsMerged, Converter={x:Static c:BoolConverters.IsMergedToOpacity}}"/>
+                </Border>
+              </DataTemplate>
+            </DataGridTemplateColumn.CellTemplate>
+          </DataGridTemplateColumn>
+
         </DataGrid.Columns>
       </v:HistoriesCommitList>
 
@@ -316,7 +316,7 @@
                 <TabItem>
                   <TabItem.Header>
                     <Border Background="Transparent" PointerPressed="OnTabHeaderPointerPressed">
-                      <TextBlock Classes="tab_header" Text="{DynamicResource Text.CommitDetail.Info}"/>
+                      <TextBlock Classes="tab_header" Text="Commit"/>
                     </Border>
                   </TabItem.Header>
 
@@ -357,7 +357,7 @@
             <TabControl SelectedIndex="1" Padding="0">
               <TabItem IsEnabled="False">
                 <TabItem.Header>
-                  <TextBlock Classes="tab_header" Text="{DynamicResource Text.CommitDetail.Info}"/>
+                  <TextBlock Classes="tab_header" Text="Commit"/>
                 </TabItem.Header>
               </TabItem>
 
@@ -384,7 +384,7 @@
               <TabItem>
                 <TabItem.Header>
                   <Border Background="Transparent" PointerPressed="OnTabHeaderPointerPressed">
-                    <TextBlock Classes="tab_header" Text="{DynamicResource Text.CommitDetail.Info}"/>
+                    <TextBlock Classes="tab_header" Text="Commit"/>
                   </Border>
                 </TabItem.Header>
 

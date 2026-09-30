@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Platform.Storage;
@@ -11,6 +12,18 @@ namespace SourceGit.Views
 {
     public partial class CommitChanges : UserControl
     {
+        public static readonly StyledProperty<bool> IsCommitInfoVisibleProperty =
+            AvaloniaProperty.Register<CommitChanges, bool>(nameof(IsCommitInfoVisible));
+
+        /// <summary>
+        ///     MyGitGUI: show a compact Fork-style commit header above the changed files.
+        /// </summary>
+        public bool IsCommitInfoVisible
+        {
+            get => GetValue(IsCommitInfoVisibleProperty);
+            set => SetValue(IsCommitInfoVisibleProperty, value);
+        }
+
         public CommitChanges()
         {
             InitializeComponent();

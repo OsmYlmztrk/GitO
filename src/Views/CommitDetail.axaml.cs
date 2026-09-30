@@ -344,7 +344,7 @@ namespace SourceGit.Views
             if (DataContext is ViewModels.CommitDetail detail && sender is Grid { DataContext: Models.Change change })
             {
                 detail.ChangeSelection = new(new List<Models.Change> { change });
-                detail.ActiveTabIndex = 1;
+                detail.ActiveTabIndex = 0;
             }
 
             e.Handled = true;
