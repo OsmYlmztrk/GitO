@@ -522,6 +522,22 @@ namespace SourceGit.Views
             }
         }
 
+        private void OpenTerminal(object sender, RoutedEventArgs e)
+        {
+            if (DataContext is ViewModels.Repository repo && Directory.Exists(repo.FullPath))
+                Native.OS.OpenTerminal(repo.FullPath);
+
+            e.Handled = true;
+        }
+
+        private void OpenCommitSearch(object sender, RoutedEventArgs e)
+        {
+            if (DataContext is ViewModels.Repository repo)
+                repo.Histories.IsSearchingCommits = true;
+
+            e.Handled = true;
+        }
+
         private void NavigateToHead(object sender, RoutedEventArgs e)
         {
             if (DataContext is ViewModels.Repository { CurrentBranch: { } head } repo)

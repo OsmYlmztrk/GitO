@@ -36,37 +36,39 @@
     </ResourceDictionary>
 
     <ResourceDictionary x:Key="Dark">
-      <Color x:Key="Color.Window">#FF252525</Color>
-      <Color x:Key="Color.WindowBorder">#FF606060</Color>
-      <Color x:Key="Color.TitleBar">#FF1F1F1F</Color>
-      <Color x:Key="Color.ToolBar">#FF2F2F2F</Color>
-      <Color x:Key="Color.Popup">#FF2B2B2B</Color>
-      <Color x:Key="Color.PopupBorder">#FF393939</Color>
-      <Color x:Key="Color.Contents">#FF1C1C1C</Color>
-      <Color x:Key="Color.Badge">#FF8F8F8F</Color>
-      <Color x:Key="Color.BadgeFG">#FFE0E0E0</Color>
-      <Color x:Key="Color.Conflict">#FFFAFAD2</Color>
-      <Color x:Key="Color.Conflict.Foreground">#FF252525</Color>
-      <Color x:Key="Color.Conflict.MineBG">#400078D7</Color>
-      <Color x:Key="Color.Conflict.TheirsBG">#40FF8C00</Color>
-      <Color x:Key="Color.Border0">#FF181818</Color>
-      <Color x:Key="Color.Border1">#FF7C7C7C</Color>
-      <Color x:Key="Color.Border2">#FF404040</Color>
-      <Color x:Key="Color.FlatButton.Background">#FF303030</Color>
-      <Color x:Key="Color.FlatButton.BackgroundHovered">#FF333333</Color>
-      <Color x:Key="Color.FlatButton.FloatingBorder">#FF4F4F4F</Color>
-      <Color x:Key="Color.FG1">#FFDFDFDF</Color>
-      <Color x:Key="Color.FG2">#FF9F9F9F</Color>
-      <Color x:Key="Color.Diff.EmptyBG">#3C000000</Color>
-      <Color x:Key="Color.Diff.AddedBG">#C03A5C3F</Color>
-      <Color x:Key="Color.Diff.DeletedBG">#C0633F3E</Color>
-      <Color x:Key="Color.Diff.AddedHighlight">#A0308D3C</Color>
-      <Color x:Key="Color.Diff.DeletedHighlight">#A09F4247</Color>
+      <!-- MyGitGUI: Fork-style dark palette (see Figma mockup) -->
+      <Color x:Key="SystemAccentColor">#FF4C9AFF</Color>
+      <Color x:Key="Color.Window">#FF232325</Color>
+      <Color x:Key="Color.WindowBorder">#FF38383C</Color>
+      <Color x:Key="Color.TitleBar">#FF1B1B1C</Color>
+      <Color x:Key="Color.ToolBar">#FF2A2A2C</Color>
+      <Color x:Key="Color.Popup">#FF2A2A2C</Color>
+      <Color x:Key="Color.PopupBorder">#FF38383C</Color>
+      <Color x:Key="Color.Contents">#FF1C1C1E</Color>
+      <Color x:Key="Color.Badge">#FF4C9AFF</Color>
+      <Color x:Key="Color.BadgeFG">#FFFFFFFF</Color>
+      <Color x:Key="Color.Conflict">#FFE5C07B</Color>
+      <Color x:Key="Color.Conflict.Foreground">#FF1C1C1E</Color>
+      <Color x:Key="Color.Conflict.MineBG">#244C9AFF</Color>
+      <Color x:Key="Color.Conflict.TheirsBG">#24F0A33A</Color>
+      <Color x:Key="Color.Border0">#FF141416</Color>
+      <Color x:Key="Color.Border1">#FF6A6A70</Color>
+      <Color x:Key="Color.Border2">#FF38383C</Color>
+      <Color x:Key="Color.FlatButton.Background">#FF2A2A2C</Color>
+      <Color x:Key="Color.FlatButton.BackgroundHovered">#FF333337</Color>
+      <Color x:Key="Color.FlatButton.FloatingBorder">#FF45454A</Color>
+      <Color x:Key="Color.FG1">#FFDCDCDC</Color>
+      <Color x:Key="Color.FG2">#FF9A9AA0</Color>
+      <Color x:Key="Color.Diff.EmptyBG">#FF212124</Color>
+      <Color x:Key="Color.Diff.AddedBG">#FF1D3B27</Color>
+      <Color x:Key="Color.Diff.DeletedBG">#FF472326</Color>
+      <Color x:Key="Color.Diff.AddedHighlight">#FF2A6A3A</Color>
+      <Color x:Key="Color.Diff.DeletedHighlight">#FF7A3036</Color>
       <Color x:Key="Color.Diff.BlockBorderHighlight">DarkCyan</Color>
-      <Color x:Key="Color.Link">#4DAAFC</Color>
-      <Color x:Key="Color.InlineCode">#FF383838</Color>
+      <Color x:Key="Color.Link">#FF4C9AFF</Color>
+      <Color x:Key="Color.InlineCode">#FF333337</Color>
       <Color x:Key="Color.InlineCodeFG">#FFF0F0F0</Color>
-      <Color x:Key="Color.SubPanel">#FF272727</Color>
+      <Color x:Key="Color.SubPanel">#FF28282B</Color>
     </ResourceDictionary>
   </ResourceDictionary.ThemeDictionaries>
 

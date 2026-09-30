@@ -9,7 +9,7 @@
              mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
              x:Class="SourceGit.Views.LauncherPage"
              x:DataType="vm:LauncherPage">
-  <Grid RowDefinitions="36,*" Background="{DynamicResource Brush.ToolBar}">
+  <Grid RowDefinitions="56,*" Background="{DynamicResource Brush.ToolBar}">
     <!-- ToolBar -->
     <Border Grid.Row="0"
             Background="Transparent"

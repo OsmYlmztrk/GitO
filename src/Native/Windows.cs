@@ -68,7 +68,7 @@ namespace SourceGit.Native
             {
                 var appDataDir = Path.Combine(
                     Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                    "SourceGit");
+                    "MyGitGUI"); // MyGitGUI: keep settings separate from an installed SourceGit
 
                 if (!Directory.Exists(appDataDir))
                     Directory.CreateDirectory(appDataDir);
