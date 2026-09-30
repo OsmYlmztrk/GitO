@@ -16,8 +16,15 @@ namespace SourceGit.ViewModels
         public object Data
         {
             get => _data;
-            set => SetProperty(ref _data, value);
+            set
+            {
+                if (SetProperty(ref _data, value))
+                    OnPropertyChanged(nameof(ConflictRadar));
+            }
         }
+
+        // MyGitGUI: lets the tab header show a conflict-radar warning for background repositories.
+        public ConflictRadar ConflictRadar => (_data as Repository)?.ConflictRadar;
 
         public Models.DirtyState DirtyState
         {

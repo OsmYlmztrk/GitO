@@ -88,26 +88,11 @@ namespace SourceGit.Views
             UpdateLeftSidebarLayout();
         }
 
-        // MyGitGUI: conflict radar toasts, sound and taskbar flash
+        // MyGitGUI: conflict radar toasts (sound / taskbar flash are handled by the Launcher for every tab)
         protected override void OnDataContextChanged(EventArgs e)
         {
-            if (_radar != null)
-                _radar.NewRisksDetected -= OnNewConflictRisks;
-
             _radar = (DataContext as ViewModels.Repository)?.ConflictRadar;
-            if (_radar != null)
-                _radar.NewRisksDetected += OnNewConflictRisks;
-
             base.OnDataContextChanged(e);
-        }
-
-        private void OnNewConflictRisks(System.Collections.Generic.List<Models.ConflictRisk> risks)
-        {
-            if (ViewModels.Preferences.Instance.ConflictRadarSound)
-                Native.Attention.PlayAlert(risks.Exists(x => x.IsHigh));
-
-            if (TopLevel.GetTopLevel(this) is Window { IsActive: false } window)
-                Native.Attention.FlashTaskbar(window.TryGetPlatformHandle()?.Handle ?? IntPtr.Zero);
         }
 
         private void OnConflictToastDismiss(object sender, RoutedEventArgs e)
@@ -120,10 +105,17 @@ namespace SourceGit.Views
 
         private void OnConflictToastIgnore(object sender, RoutedEventArgs e)
         {
-            if (sender is Control { DataContext: Models.ConflictRisk risk })
-                _radar?.Ignore(risk);
+            if (_radar != null && sender is Control { DataContext: Models.ConflictRisk risk } control)
+                ConflictRadarPanel.CreateIgnoreMenu(_radar, risk).Open(control);
 
             e.Handled = true;
+        }
+
+        private async void OnConflictToastLock(object sender, RoutedEventArgs e)
+        {
+            e.Handled = true;
+            if (_radar != null && sender is Control { DataContext: Models.ConflictRisk risk })
+                await _radar.LockFileAsync(risk);
         }
 
         private void OnConflictToastGoToCommit(object sender, RoutedEventArgs e)
@@ -143,26 +135,6 @@ namespace SourceGit.Views
                 repo.SelectedViewIndex = index;
 
             e.Handled = true;
-        }
-
-        private async void OnOpenLFSLocks(object sender, RoutedEventArgs e)
-        {
-            e.Handled = true;
-
-            if (DataContext is not ViewModels.Repository { Remotes.Count: > 0 } repo)
-                return;
-
-            var remote = repo.Remotes.Find(x => x.Name == "origin") ?? repo.Remotes[0];
-            await this.ShowDialogAsync(new ViewModels.LFSLocks(repo, remote.Name));
-        }
-
-        private async void OnOpenConfigure(object sender, RoutedEventArgs e)
-        {
-            if (DataContext is ViewModels.Repository repo)
-            {
-                await this.ShowDialogAsync(new ViewModels.RepositoryConfigure(repo));
-                e.Handled = true;
-            }
         }
 
         private async void OnSkipInProgress(object sender, RoutedEventArgs e)

@@ -522,6 +522,13 @@ namespace SourceGit.Views
             }
         }
 
+        private async void OpenRepositoryConfigure(object sender, RoutedEventArgs e)
+        {
+            e.Handled = true;
+            if (DataContext is ViewModels.Repository repo)
+                await this.ShowDialogAsync(new ViewModels.RepositoryConfigure(repo));
+        }
+
         private void OpenTerminal(object sender, RoutedEventArgs e)
         {
             if (DataContext is ViewModels.Repository repo && Directory.Exists(repo.FullPath))

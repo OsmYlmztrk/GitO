@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 using Avalonia;
 using Avalonia.Controls;
@@ -43,6 +44,7 @@ namespace SourceGit.Views
 
             InitializeComponent();
             PositionChanged += OnPositionChanged;
+            ViewModels.ConflictRadar.AlertRaised += OnConflictRadarAlert;
 
             var layout = ViewModels.Preferences.Instance.Layout;
             Width = layout.LauncherWidth;
@@ -331,6 +333,16 @@ namespace SourceGit.Views
             }
         }
 
+        // MyGitGUI: conflict radar alerts from any open repository tab.
+        private void OnConflictRadarAlert(ViewModels.ConflictRadar radar, List<Models.ConflictRisk> risks, bool loud)
+        {
+            if (loud && ViewModels.Preferences.Instance.ConflictRadarSound)
+                Native.Attention.PlayAlert(risks.Exists(x => x.IsHigh));
+
+            if (!IsActive)
+                Native.Attention.FlashTaskbar(TryGetPlatformHandle()?.Handle ?? IntPtr.Zero);
+        }
+
         protected override void OnClosing(WindowClosingEventArgs e)
         {
             base.OnClosing(e);
@@ -342,6 +354,7 @@ namespace SourceGit.Views
         protected override void OnClosed(EventArgs e)
         {
             base.OnClosed(e);
+            ViewModels.ConflictRadar.AlertRaised -= OnConflictRadarAlert;
 
             if (!Design.IsDesignMode)
                 ViewModels.Preferences.Instance.Save();

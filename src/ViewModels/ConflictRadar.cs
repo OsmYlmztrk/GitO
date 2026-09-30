@@ -2,6 +2,8 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Globalization;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Threading;
@@ -10,12 +12,15 @@ using CommunityToolkit.Mvvm.ComponentModel;
 namespace SourceGit.ViewModels
 {
     /// <summary>
-    ///     MyGitGUI: warns when a file you are changing (uncommitted or unpushed) was also changed by
-    ///     someone else on a recently active remote branch. Re-scans after fetch/branch refresh and
-    ///     whenever local changes change.
+    ///     MyGitGUI: warns when a file you are changing (uncommitted or unpushed) is also being changed by
+    ///     someone else — on a recently active remote branch, or behind an LFS lock. Keeps a persistent
+    ///     notification history, ignore rules and a snooze timer per repository.
     /// </summary>
     public class ConflictRadar : ObservableObject
     {
+        /// <summary>Raised on the UI thread for new alerts of any open repository (sound / taskbar flash).</summary>
+        public static event Action<ConflictRadar, List<Models.ConflictRisk>, bool> AlertRaised;
+
         public List<Models.ConflictRisk> Risks
         {
             get => _risks;
@@ -26,6 +31,7 @@ namespace SourceGit.ViewModels
                     OnPropertyChanged(nameof(Count));
                     OnPropertyChanged(nameof(HasRisks));
                     OnPropertyChanged(nameof(HasHighRisk));
+                    OnPropertyChanged(nameof(HasAlert));
                 }
             }
         }
@@ -33,8 +39,27 @@ namespace SourceGit.ViewModels
         public int Count => _risks.Count;
         public bool HasRisks => _risks.Count > 0;
         public bool HasHighRisk => _risks.Exists(x => x.IsHigh);
+        public bool HasAlert => _risks.Exists(x => x.IsAlert);
 
         public ObservableCollection<Models.ConflictRisk> Toasts { get; } = [];
+
+        public List<Models.ConflictNotificationRecord> History
+        {
+            get
+            {
+                var list = new List<Models.ConflictNotificationRecord>(_store.History);
+                list.Reverse();
+                return list;
+            }
+        }
+
+        public bool HasHistory => _store.History.Count > 0;
+
+        public List<Models.ConflictIgnoreRule> IgnoreRules => new(_store.IgnoreRules);
+        public bool HasIgnoreRules => _store.IgnoreRules.Count > 0;
+
+        public bool IsSnoozed => _store.SnoozeUntil > DateTime.Now;
+        public string SnoozeText => IsSnoozed ? $"{_store.SnoozeUntil:HH:mm}'e kadar sessiz" : string.Empty;
 
         public bool IsScanning
         {
@@ -102,12 +127,10 @@ namespace SourceGit.ViewModels
             }
         }
 
-        /// <summary>Raised on the UI thread with risks that were not reported before.</summary>
-        public event Action<List<Models.ConflictRisk>> NewRisksDetected;
-
         public ConflictRadar(Repository repo)
         {
             _repo = repo;
+            _store = Models.ConflictRadarStore.Load(repo.GitDir);
         }
 
         public void SetLocalChanges(List<Models.Change> changes)
@@ -126,34 +149,139 @@ namespace SourceGit.ViewModels
             Schedule();
         }
 
-        public void Ignore(Models.ConflictRisk risk)
+        public void Rescan()
         {
-            _ignored.Add(IgnoreKey(risk));
-            Toasts.Remove(risk);
-            Risks = _risks.FindAll(x => !_ignored.Contains(IgnoreKey(x)));
+            _fileCache.Clear();
+            _locksFetchedAt = DateTime.MinValue;
+            Schedule(0);
         }
 
         public void GoToCommit(Models.ConflictRisk risk)
         {
-            _repo.NavigateToCommit(risk.SHA);
+            if (risk.CanGoToCommit)
+                _repo.NavigateToCommit(risk.SHA);
+        }
+
+        public void GoToCommit(Models.ConflictNotificationRecord record)
+        {
+            if (record.CanGoToCommit)
+                _repo.NavigateToCommit(record.SHA);
         }
 
         public void DismissToast(Models.ConflictRisk risk)
         {
             Toasts.Remove(risk);
+            SetStatus(risk.Key, Models.ConflictNotificationStatus.Dismissed);
+            SaveStore();
         }
 
-        public void Rescan()
+        public void Ignore(Models.ConflictRisk risk, Models.ConflictIgnoreRuleType type)
         {
-            _fileCache.Clear();
-            Schedule(0);
+            var value = type switch
+            {
+                Models.ConflictIgnoreRuleType.Branch => risk.Branch,
+                Models.ConflictIgnoreRuleType.Author => string.IsNullOrEmpty(risk.AuthorEmail) ? risk.Author : risk.AuthorEmail,
+                Models.ConflictIgnoreRuleType.Pattern => "*" + risk.Extension,
+                _ => risk.Path,
+            };
+
+            if (string.IsNullOrEmpty(value) || value == "*")
+                return;
+
+            var rule = _store.IgnoreRules.Find(x => x.Type == type && x.Value == value);
+            if (rule == null)
+            {
+                rule = new Models.ConflictIgnoreRule() { Type = type, Value = value };
+                _store.IgnoreRules.Add(rule);
+            }
+
+            foreach (var r in _store.History)
+            {
+                if (r.Status != Models.ConflictNotificationStatus.Resolved && rule.Matches(r.ToRisk()))
+                {
+                    r.Status = Models.ConflictNotificationStatus.Ignored;
+                    r.StatusAt = DateTime.Now;
+                }
+            }
+
+            for (var i = Toasts.Count - 1; i >= 0; i--)
+            {
+                if (rule.Matches(Toasts[i]))
+                    Toasts.RemoveAt(i);
+            }
+
+            Risks = _risks.FindAll(x => !rule.Matches(x));
+            SaveStore();
+        }
+
+        public void RemoveIgnoreRule(Models.ConflictIgnoreRule rule)
+        {
+            _store.IgnoreRules.RemoveAll(x => x.Type == rule.Type && x.Value == rule.Value);
+            SaveStore();
+            Rescan();
+        }
+
+        /// <summary>Bring a dismissed / ignored notification back: drop matching ignore rules and show it again if still relevant.</summary>
+        public void Restore(Models.ConflictNotificationRecord record)
+        {
+            var risk = record.ToRisk();
+            _store.IgnoreRules.RemoveAll(x => x.Matches(risk));
+
+            var current = _allRisks.Find(x => x.Key == record.Key);
+            var stored = _store.History.FindLast(x => x.Key == record.Key);
+            if (current != null && stored != null)
+            {
+                stored.Status = Models.ConflictNotificationStatus.Active;
+                stored.StatusAt = DateTime.Now;
+                if (current.IsAlert && !Toasts.Contains(current))
+                    Toasts.Insert(0, current);
+            }
+
+            SaveStore();
+            Rescan();
+        }
+
+        public void ClearHistory()
+        {
+            _store.History.RemoveAll(x => x.Status != Models.ConflictNotificationStatus.Active);
+            SaveStore();
+        }
+
+        public void Snooze(TimeSpan duration)
+        {
+            _store.SnoozeUntil = DateTime.Now.Add(duration);
+            Toasts.Clear();
+            SaveStore();
+        }
+
+        public void SnoozeUntilTonight()
+        {
+            _store.SnoozeUntil = DateTime.Today.AddDays(1).AddSeconds(-1);
+            Toasts.Clear();
+            SaveStore();
+        }
+
+        public void Unsnooze()
+        {
+            _store.SnoozeUntil = DateTime.MinValue;
+            SaveStore();
+        }
+
+        public async Task LockFileAsync(Models.ConflictRisk risk)
+        {
+            var remote = GetRemote();
+            if (string.IsNullOrEmpty(remote))
+                return;
+
+            Toasts.Remove(risk);
+            await new Commands.LFS(_repo.FullPath).LockAsync(remote, risk.Path);
+            Rescan();
         }
 
         public void Dispose()
         {
             _debounce?.Cancel();
             _debounce = null;
-            NewRisksDetected = null;
         }
 
         private void Schedule(int delayMs = 1500)
@@ -193,7 +321,7 @@ namespace SourceGit.ViewModels
             {
                 var repoPath = _repo.FullPath;
 
-                // My side: uncommitted files + files in commits not pushed to the upstream yet.
+                // ---- My side: uncommitted files + files in commits not pushed yet.
                 var mine = new Dictionary<string, bool>(StringComparer.Ordinal);
                 foreach (var p in local)
                     mine[p] = true;
@@ -214,11 +342,35 @@ namespace SourceGit.ViewModels
                 }
 
                 _myEmail ??= await new Commands.Config(repoPath).GetAsync("user.email").ConfigureAwait(false) ?? string.Empty;
+                _myName ??= await new Commands.Config(repoPath).GetAsync("user.name").ConfigureAwait(false) ?? string.Empty;
 
-                // Their side: remote branches with a commit in the last N days, excluding my own upstream.
-                var since = (ulong)DateTimeOffset.UtcNow.AddDays(-Preferences.Instance.ConflictRadarDays).ToUnixTimeSeconds();
+                // ---- LFS: lockable files and current locks (network; cached for a minute).
+                var lockable = new HashSet<string>(StringComparer.Ordinal);
+                var myLocks = new HashSet<string>(StringComparer.Ordinal);
+                var otherLocks = new Dictionary<string, Models.LFSLock>(StringComparer.Ordinal);
+                var usesLFS = UsesLFS(repoPath);
+                if (usesLFS)
+                {
+                    var paths = new List<string>(mine.Keys);
+                    for (var i = 0; i < paths.Count; i += 100)
+                    {
+                        var chunk = paths.GetRange(i, Math.Min(100, paths.Count - i));
+                        lockable.UnionWith(await new Commands.QueryLockableFiles(repoPath, chunk).GetResultAsync().ConfigureAwait(false));
+                    }
+
+                    await RefreshLocksAsync(repoPath).ConfigureAwait(false);
+                    foreach (var l in _cachedMyLocks)
+                        myLocks.Add(l.Path);
+                    foreach (var l in _cachedOtherLocks)
+                        otherLocks.TryAdd(l.Path, l);
+                }
+
+                token.ThrowIfCancellationRequested();
+
                 var risks = new List<Models.ConflictRisk>();
 
+                // ---- Their side (1): remote branches with a commit in the last N days.
+                var since = (ulong)DateTimeOffset.UtcNow.AddDays(-Preferences.Instance.ConflictRadarDays).ToUnixTimeSeconds();
                 foreach (var b in branches)
                 {
                     token.ThrowIfCancellationRequested();
@@ -235,6 +387,7 @@ namespace SourceGit.ViewModels
                         _fileCache[cacheKey] = theirs;
                     }
 
+                    string mergeBase = null;
                     foreach (var path in theirs)
                     {
                         if (!mine.TryGetValue(path, out var isUncommitted))
@@ -248,23 +401,76 @@ namespace SourceGit.ViewModels
                         if (!string.IsNullOrEmpty(_myEmail) && t.Email.Equals(_myEmail, StringComparison.OrdinalIgnoreCase))
                             continue;
 
-                        var level = Models.ConflictRisk.LooksBinary(path) ||
-                                    await new Commands.IsLFSFiltered(repoPath, path).GetResultAsync().ConfigureAwait(false)
-                            ? Models.ConflictRiskLevel.High
-                            : Models.ConflictRiskLevel.Medium;
+                        var isBinary = Models.ConflictRisk.LooksBinary(path) ||
+                                       (usesLFS && await new Commands.IsLFSFiltered(repoPath, path).GetResultAsync().ConfigureAwait(false));
+
+                        var overlap = true;
+                        if (!isBinary)
+                        {
+                            mergeBase ??= await new Commands.MergeBase(repoPath, "HEAD", b.FullName).GetResultAsync().ConfigureAwait(false);
+                            if (!string.IsNullOrEmpty(mergeBase))
+                            {
+                                var theirRanges = await new Commands.QueryDiffOldRanges(repoPath, $"{mergeBase} {b.FullName}", path).GetResultAsync().ConfigureAwait(false);
+                                var myRanges = await new Commands.QueryDiffOldRanges(repoPath, mergeBase, path).GetResultAsync().ConfigureAwait(false);
+
+                                // No hunks on a side (new/untracked or binary-ish file): stay conservative.
+                                overlap = theirRanges.Count == 0 || myRanges.Count == 0 || Commands.QueryDiffOldRanges.Overlap(theirRanges, myRanges);
+                            }
+                        }
 
                         risks.Add(new Models.ConflictRisk()
                         {
+                            Kind = Models.ConflictRiskKind.BranchChange,
+                            Level = isBinary ? Models.ConflictRiskLevel.High : (overlap ? Models.ConflictRiskLevel.Medium : Models.ConflictRiskLevel.Low),
+                            LinesOverlap = !isBinary && overlap,
                             Path = path,
                             Branch = b.FriendlyName,
                             SHA = t.SHA,
                             Author = t.Author,
                             AuthorEmail = t.Email,
                             Time = t.Time,
-                            Level = level,
                             IsUncommitted = isUncommitted,
+                            IsLockable = lockable.Contains(path),
+                            IsLocked = myLocks.Contains(path) || otherLocks.ContainsKey(path),
                         });
                     }
+                }
+
+                // ---- Their side (2): somebody else holds the lock of a file I am changing (catches unpushed work).
+                foreach (var (path, l) in otherLocks)
+                {
+                    if (!mine.TryGetValue(path, out var isUncommitted))
+                        continue;
+
+                    risks.Add(new Models.ConflictRisk()
+                    {
+                        Kind = Models.ConflictRiskKind.LockedByOther,
+                        Level = Models.ConflictRiskLevel.High,
+                        Path = path,
+                        Author = l.Owner?.Name ?? "?",
+                        Time = ParseLockTime(l.LockedAt),
+                        IsUncommitted = isUncommitted,
+                        IsLockable = true,
+                        IsLocked = true,
+                    });
+                }
+
+                // ---- Reminder: editing a lockable file without holding its lock.
+                foreach (var path in lockable)
+                {
+                    if (!mine.TryGetValue(path, out var isUncommitted) || !isUncommitted)
+                        continue;
+                    if (myLocks.Contains(path) || otherLocks.ContainsKey(path))
+                        continue;
+
+                    risks.Add(new Models.ConflictRisk()
+                    {
+                        Kind = Models.ConflictRiskKind.UnlockedEdit,
+                        Level = Models.ConflictRiskLevel.Low,
+                        Path = path,
+                        IsUncommitted = true,
+                        IsLockable = true,
+                    });
                 }
 
                 risks.Sort((l, r) => l.Level != r.Level ? r.Level.CompareTo(l.Level) : r.Time.CompareTo(l.Time));
@@ -276,6 +482,31 @@ namespace SourceGit.ViewModels
             }
         }
 
+        private async Task RefreshLocksAsync(string repoPath)
+        {
+            if (DateTime.Now - _locksFetchedAt < TimeSpan.FromSeconds(60))
+                return;
+
+            _locksFetchedAt = DateTime.Now;
+
+            var remote = GetRemote();
+            if (string.IsNullOrEmpty(remote))
+                return;
+
+            var verified = await new Commands.QueryVerifiedLFSLocks(repoPath, remote).GetResultAsync().ConfigureAwait(false);
+            if (verified != null)
+            {
+                _cachedMyLocks = verified.Ours ?? [];
+                _cachedOtherLocks = verified.Theirs ?? [];
+                return;
+            }
+
+            // Server without --verify support: split by owner name.
+            var all = await new Commands.LFS(repoPath) { RaiseError = false }.GetLocksAsync(remote).ConfigureAwait(false);
+            _cachedMyLocks = all.FindAll(x => x.Owner?.Name == _myName);
+            _cachedOtherLocks = all.FindAll(x => x.Owner?.Name != _myName);
+        }
+
         private void Publish(List<Models.ConflictRisk> risks, CancellationToken token)
         {
             Dispatcher.UIThread.Post(() =>
@@ -283,10 +514,54 @@ namespace SourceGit.ViewModels
                 if (token.IsCancellationRequested)
                     return;
 
-                var visible = risks.FindAll(x => !_ignored.Contains(IgnoreKey(x)));
-                var fresh = visible.FindAll(x => _reported.Add(x.Key));
+                _allRisks = risks;
+                var snoozed = IsSnoozed;
+                var changed = false;
+                var fresh = new List<Models.ConflictRisk>();
+                var keys = new HashSet<string>(StringComparer.Ordinal);
 
-                // Drop toasts for risks that are gone (e.g. file committed & pushed, branch merged).
+                foreach (var r in risks)
+                {
+                    keys.Add(r.Key);
+                    if (IsIgnored(r))
+                        continue;
+
+                    var existing = _store.History.FindLast(x => x.Key == r.Key);
+                    if (existing != null)
+                    {
+                        // Came back after being resolved: active again, but no second toast.
+                        if (existing.Status == Models.ConflictNotificationStatus.Resolved)
+                        {
+                            existing.Status = Models.ConflictNotificationStatus.Active;
+                            existing.StatusAt = DateTime.Now;
+                            changed = true;
+                        }
+
+                        continue;
+                    }
+
+                    var record = Models.ConflictNotificationRecord.From(r);
+                    record.Status = snoozed ? Models.ConflictNotificationStatus.Snoozed : Models.ConflictNotificationStatus.Active;
+                    _store.History.Add(record);
+                    changed = true;
+
+                    if (!snoozed && r.IsAlert)
+                        fresh.Add(r);
+                }
+
+                // Risks that went away (pushed, merged, reverted, unlocked...).
+                foreach (var h in _store.History)
+                {
+                    if (h.Status != Models.ConflictNotificationStatus.Resolved && !keys.Contains(h.Key))
+                    {
+                        h.Status = Models.ConflictNotificationStatus.Resolved;
+                        h.StatusAt = DateTime.Now;
+                        changed = true;
+                    }
+                }
+
+                var visible = risks.FindAll(x => !IsIgnored(x));
+
                 for (var i = Toasts.Count - 1; i >= 0; i--)
                 {
                     if (!visible.Exists(x => x.Key == Toasts[i].Key))
@@ -295,18 +570,54 @@ namespace SourceGit.ViewModels
 
                 Risks = visible;
 
-                if (fresh.Count > 0)
+                foreach (var r in fresh)
                 {
-                    foreach (var r in fresh)
-                    {
-                        Toasts.Insert(0, r);
-                        while (Toasts.Count > MaxToasts)
-                            Toasts.RemoveAt(Toasts.Count - 1);
-                    }
-
-                    NewRisksDetected?.Invoke(fresh);
+                    Toasts.Insert(0, r);
+                    while (Toasts.Count > MaxToasts)
+                        Toasts.RemoveAt(Toasts.Count - 1);
                 }
+
+                if (changed)
+                    SaveStore();
+
+                if (fresh.Count > 0)
+                    AlertRaised?.Invoke(this, fresh, fresh.Exists(x => x.IsLoud));
+
+                OnPropertyChanged(nameof(IsSnoozed));
+                OnPropertyChanged(nameof(SnoozeText));
             });
+        }
+
+        private bool IsIgnored(Models.ConflictRisk risk)
+        {
+            foreach (var rule in _store.IgnoreRules)
+            {
+                if (rule.Matches(risk))
+                    return true;
+            }
+
+            return false;
+        }
+
+        private void SetStatus(string key, Models.ConflictNotificationStatus status)
+        {
+            var record = _store.History.FindLast(x => x.Key == key);
+            if (record != null)
+            {
+                record.Status = status;
+                record.StatusAt = DateTime.Now;
+            }
+        }
+
+        private void SaveStore()
+        {
+            _store.Save(_repo.GitDir);
+            OnPropertyChanged(nameof(History));
+            OnPropertyChanged(nameof(HasHistory));
+            OnPropertyChanged(nameof(IgnoreRules));
+            OnPropertyChanged(nameof(HasIgnoreRules));
+            OnPropertyChanged(nameof(IsSnoozed));
+            OnPropertyChanged(nameof(SnoozeText));
         }
 
         private void ClearAll()
@@ -316,20 +627,51 @@ namespace SourceGit.ViewModels
             Risks = [];
         }
 
-        // Ignoring is per file + branch, so later commits on the same branch stay quiet too.
-        private static string IgnoreKey(Models.ConflictRisk r) => $"{r.Branch}|{r.Path}";
+        private string GetRemote()
+        {
+            var remotes = _repo.Remotes;
+            if (remotes == null || remotes.Count == 0)
+                return null;
+
+            return remotes.Find(x => x.Name == "origin")?.Name ?? remotes[0].Name;
+        }
+
+        private static bool UsesLFS(string repoPath)
+        {
+            try
+            {
+                var attrs = Path.Combine(repoPath, ".gitattributes");
+                return File.Exists(attrs) && File.ReadAllText(attrs).Contains("filter=lfs", StringComparison.Ordinal);
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static ulong ParseLockTime(string iso)
+        {
+            if (DateTimeOffset.TryParse(iso, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var time))
+                return (ulong)time.ToUnixTimeSeconds();
+
+            return 0;
+        }
 
         private const int MaxToasts = 3;
 
         private readonly Repository _repo;
+        private readonly Models.ConflictRadarStore _store;
         private List<Models.Branch> _branches = null;
         private HashSet<string> _localPaths = [];
         private List<Models.ConflictRisk> _risks = [];
+        private List<Models.ConflictRisk> _allRisks = [];
         private bool _isScanning = false;
         private string _myEmail = null;
+        private string _myName = null;
         private CancellationTokenSource _debounce = null;
+        private DateTime _locksFetchedAt = DateTime.MinValue;
+        private List<Models.LFSLock> _cachedMyLocks = [];
+        private List<Models.LFSLock> _cachedOtherLocks = [];
         private readonly ConcurrentDictionary<string, HashSet<string>> _fileCache = new(StringComparer.Ordinal);
-        private readonly HashSet<string> _reported = new(StringComparer.Ordinal);
-        private readonly HashSet<string> _ignored = new(StringComparer.Ordinal);
     }
 }

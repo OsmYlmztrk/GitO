@@ -96,17 +96,24 @@
 
                   <Grid Grid.Column="1"
                         HorizontalAlignment="Center" VerticalAlignment="Center"
-                        ColumnDefinitions="Auto,*"
+                        ColumnDefinitions="Auto,Auto,*"
                         IsHitTestVisible="False"
                         IsVisible="{Binding Node.IsRepository}">
-                    <Ellipse Grid.Column="0"
+                    <Path Grid.Column="0"
+                          Width="11" Height="11"
+                          Margin="0,0,6,0"
+                          VerticalAlignment="Center"
+                          Data="{StaticResource Icons.Conflict}"
+                          Fill="#FFF0A33A"
+                          IsVisible="{Binding ConflictRadar.HasAlert, FallbackValue=False}"/>
+                    <Ellipse Grid.Column="1"
                              Width="8" Height="8"
                              Margin="0,0,6,0"
                              VerticalAlignment="Center"
                              IsVisible="{Binding DirtyState, Converter={x:Static ObjectConverters.NotEqual}, ConverterParameter={x:Static m:DirtyState.None}}"
                              Fill="{Binding DirtyState, Converter={x:Static c:DirtyStateConverters.ToBrush}}"/>
 
-                    <TextBlock Grid.Column="1"
+                    <TextBlock Grid.Column="2"
                                VerticalAlignment="Center"
                                FontSize="{Binding Source={x:Static vm:Preferences.Instance}, Path=DefaultFontSize, Converter={x:Static c:DoubleConverters.Decrease}}"
                                TextAlignment="Center"
