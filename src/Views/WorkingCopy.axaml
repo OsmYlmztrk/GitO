@@ -22,6 +22,7 @@
         <RowDefinition Height="*" MinHeight="100"/>
         <RowDefinition Height="1"/>
         <RowDefinition Height="*" MinHeight="100"/>
+        <RowDefinition Height="Auto"/>
       </Grid.RowDefinitions>
 
       <!-- Search Filter -->
@@ -84,10 +85,10 @@
       <!-- Unstaged -->
       <Grid Grid.Row="1" RowDefinitions="28,*">
         <!-- Unstaged Toolbar -->
-        <Border Grid.Row="0" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource Brush.Border0}">
+        <Border Grid.Row="0" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource Brush.Border0}" Background="{DynamicResource Brush.SubPanel}">
           <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto,Auto,Auto,Auto,Auto">
             <Path Grid.Column="0" Margin="8,0,0,0" Width="14" Height="14" Fill="{DynamicResource Brush.FG2}" Data="{StaticResource Icons.Changes}"/>
-            <TextBlock Grid.Column="1" Foreground="{DynamicResource Brush.FG2}" FontWeight="Bold" Margin="4,0,0,0">
+            <TextBlock Grid.Column="1" Foreground="{DynamicResource Brush.FG1}" FontWeight="SemiBold" Margin="6,0,0,0">
               <Run Text="{DynamicResource Text.WorkingCopy.Unstaged}"/>
               <Run Text="{Binding UnstagedCountInfo, Mode=OneWay}"/>
             </TextBlock>
@@ -165,12 +166,12 @@
                     Focusable="False"/>
 
       <!-- Staged -->
-      <Grid Grid.Row="3" RowDefinitions="27,*">
+      <Grid Grid.Row="3" RowDefinitions="28,*">
         <!-- Staged Toolbar -->
-        <Border Grid.Row="0" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource Brush.Border0}">
+        <Border Grid.Row="0" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource Brush.Border0}" Background="{DynamicResource Brush.SubPanel}">
           <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto,Auto">
             <Path Grid.Column="0" Margin="8,0,0,0" Width="14" Height="14" Fill="{DynamicResource Brush.FG2}" Data="{StaticResource Icons.Changes}"/>
-            <TextBlock Grid.Column="1" Foreground="{DynamicResource Brush.FG2}" FontWeight="Bold" Margin="4,0,0,0">
+            <TextBlock Grid.Column="1" Foreground="{DynamicResource Brush.FG1}" FontWeight="SemiBold" Margin="6,0,0,0">
               <Run Text="{DynamicResource Text.WorkingCopy.Staged}"/>
               <Run Text="{Binding StagedCountInfo, Mode=OneWay}"/>
             </TextBlock>
@@ -207,6 +208,223 @@
                                 ChangeDoubleTapped="OnStagedChangeDoubleTapped"
                                 KeyDown="OnStagedKeyDown"/>
       </Grid>
+
+      <!-- Commit box (MyGitGUI: bottom of the changes column, like Fork) -->
+      <Border Grid.Row="4"
+              Padding="8,8,8,4"
+              BorderThickness="0,1,0,0"
+              BorderBrush="{DynamicResource Brush.Border0}"
+              Background="{DynamicResource Brush.SubPanel}">
+        <Grid RowDefinitions="Auto,Auto,40">
+        <!-- Commit Message -->
+        <v:CommitMessageToolBox Grid.Row="0" Height="140"
+                                ShowAdvancedOptions="True"
+                                CommitMessage="{Binding CommitMessage, Mode=TwoWay}"/>
+
+        <!-- Commit Flags -->
+        <WrapPanel Grid.Row="1" Orientation="Horizontal" Margin="0,4,0,0">
+            <CheckBox
+                      Height="24"
+                      Margin="0,0,12,0"
+                      HorizontalAlignment="Left"
+                      IsChecked="{Binding EnableSignOff, Mode=TwoWay}"
+                      Content="{DynamicResource Text.WorkingCopy.SignOff}"
+                      ToolTip.Tip="--signoff"
+                      ToolTip.Placement="Top"
+                      ToolTip.VerticalOffset="0"/>
+
+            <CheckBox
+                      Height="24"
+                      Margin="0,0,12,0"
+                      HorizontalAlignment="Left"
+                      IsChecked="{Binding NoVerifyOnCommit, Mode=TwoWay}"
+                      Content="{DynamicResource Text.WorkingCopy.NoVerify}"
+                      ToolTip.Tip="--no-verify"
+                      ToolTip.Placement="Top"
+                      ToolTip.VerticalOffset="0"/>
+
+            <CheckBox
+                      Height="24"
+                      Margin="0,0,12,0"
+                      HorizontalAlignment="Left"
+                      IsChecked="{Binding UseAmend, Mode=TwoWay}"
+                      Content="{DynamicResource Text.WorkingCopy.Amend}"
+                      ToolTip.Tip="--amend"
+                      ToolTip.Placement="Top"
+                      ToolTip.VerticalOffset="0"/>
+
+            <CheckBox
+                      Height="24"
+                      Margin="0,0,12,0"
+                      HorizontalAlignment="Left"
+                      IsChecked="{Binding ResetAuthor, Mode=TwoWay}"
+                      IsVisible="{Binding UseAmend}"
+                      Content="{DynamicResource Text.WorkingCopy.ResetAuthor}"
+                      ToolTip.Tip="--reset-author"
+                      ToolTip.Placement="Top"
+                      ToolTip.VerticalOffset="0"/>
+        </WrapPanel>
+
+        <!-- Commit Options -->
+        <Grid Grid.Row="2" VerticalAlignment="Center" ColumnDefinitions="Auto,Auto,Auto,Auto,*,Auto,Auto,Auto">
+          <v:LoadingIcon Grid.Column="4"
+                         Width="18" Height="18"
+                         HorizontalAlignment="Right"
+                         IsVisible="{Binding IsCommitting}"/>
+
+          <SplitButton Grid.Column="5"
+                       Content="{DynamicResource Text.Repository.Continue}"
+                       Height="28"
+                       Margin="8,0,0,0"
+                       Padding="8,0"
+                       Click="OnContinue"
+                       IsVisible="{Binding InProgressContext, Converter={x:Static ObjectConverters.IsNotNull}}">
+            <SplitButton.Styles>
+              <Style Selector="SplitButton">
+                <Setter Property="MinHeight" Value="24"/>
+                <Setter Property="Template">
+                  <ControlTemplate>
+                    <Grid ColumnDefinitions="*,1,Auto">
+                      <Button x:Name="PART_PrimaryButton"
+                              Grid.Column="0"
+                              Classes="flat primary"
+                              MinWidth="32"
+                              HorizontalAlignment="Stretch"
+                              VerticalAlignment="Stretch"
+                              Content="{TemplateBinding Content}"
+                              ContentTemplate="{TemplateBinding ContentTemplate}"
+                              Command="{TemplateBinding Command}"
+                              CommandParameter="{TemplateBinding CommandParameter}"
+                              CornerRadius="3,0,0,3"
+                              Padding="{TemplateBinding Padding}"
+                              Focusable="False"
+                              KeyboardNavigation.IsTabStop="False" />
+
+                      <Button x:Name="PART_SecondaryButton"
+                              Grid.Column="2"
+                              Classes="flat primary"
+                              Width="32"
+                              CornerRadius="0,3,3,0"
+                              Padding="0"
+                              Focusable="False"
+                              HorizontalAlignment="Stretch"
+                              VerticalAlignment="Stretch"
+                              KeyboardNavigation.IsTabStop="False">
+                        <Path Height="12" Width="12"
+                              Margin="0,4,0,0"
+                              Fill="{DynamicResource AccentButtonForeground}"
+                              Data="{DynamicResource Icons.Down}"/>
+                      </Button>
+                    </Grid>
+                  </ControlTemplate>
+                </Setter>
+
+                <Style Selector="^:disabled /template/ Button">
+                  <Setter Property="BorderThickness" Value="1"/>
+                  <Setter Property="BorderBrush" Value="{DynamicResource Brush.Border2}"/>
+                  <Setter Property="Background" Value="Transparent"/>
+                </Style>
+
+                <Style Selector="^:disabled AccessText">
+                  <Setter Property="Foreground" Value="{DynamicResource Brush.FG2}"/>
+                </Style>
+
+                <Style Selector="^:disabled Path">
+                  <Setter Property="Fill" Value="{DynamicResource Brush.FG2}"/>
+                </Style>
+              </Style>
+            </SplitButton.Styles>
+
+            <SplitButton.IsEnabled>
+              <MultiBinding Converter="{x:Static BoolConverters.And}">
+                <Binding Path="IsCommitting" Converter="{x:Static BoolConverters.Not}"/>
+                <Binding Path="HasUnsolvedConflicts" Converter="{x:Static BoolConverters.Not}"/>
+              </MultiBinding>
+            </SplitButton.IsEnabled>
+            <SplitButton.Flyout>
+              <MenuFlyout>
+                <MenuItem Header="{DynamicResource Text.WorkingCopy.CommitToEdit}"
+                          Click="OnCommit"
+                          IsEnabled="{Binding CommitMessage, Converter={x:Static c:StringConverters.IsNotNullOrWhitespace}}"/>
+              </MenuFlyout>
+            </SplitButton.Flyout>
+          </SplitButton>
+
+          <Button Grid.Column="5"
+                  Classes="flat primary"
+                  Content="{DynamicResource Text.WorkingCopy.Commit}"
+                  Height="28"
+                  Margin="8,0,0,0"
+                  Padding="8,0"
+                  Click="OnCommit"
+                  HotKey="{OnPlatform Ctrl+Enter, macOS=⌘+Enter}"
+                  IsVisible="{Binding InProgressContext, Converter={x:Static ObjectConverters.IsNull}}"
+                  ToolTip.Placement="Top"
+                  ToolTip.VerticalOffset="0">
+            <ToolTip.Tip>
+              <StackPanel Orientation="Vertical">
+                <TextBlock TextAlignment="Left" TextWrapping="Wrap">
+                  <Run Text="{OnPlatform Ctrl+Enter, macOS=⌘+Enter}"/>
+                  <Run Foreground="{DynamicResource Brush.FG2}" Text="{DynamicResource Text.WorkingCopy.CommitTip}"/>
+                </TextBlock>
+                <TextBlock TextAlignment="Left" TextWrapping="Wrap" Margin="0,4,0,0">
+                  <Run Text="{OnPlatform Ctrl+Shift+Enter, macOS=⌘+⇧+Enter}"/>
+                  <Run Foreground="{DynamicResource Brush.FG2}" Text="{DynamicResource Text.WorkingCopy.CommitWithAutoStage}"/>
+                </TextBlock>
+              </StackPanel>
+            </ToolTip.Tip>
+
+            <Button.IsEnabled>
+              <MultiBinding Converter="{x:Static BoolConverters.And}">
+                <Binding Path="IsCommitting" Converter="{x:Static BoolConverters.Not}"/>
+                <Binding Path="CommitMessage" Converter="{x:Static c:StringConverters.IsNotNullOrWhitespace}"/>
+              </MultiBinding>
+            </Button.IsEnabled>
+          </Button>
+
+          <!-- Invisible button just to add another hotkey `Ctrl+Shift+Enter` to commit with auto-stage -->
+          <Button Grid.Column="6"
+                  Width="0" Height="0"
+                  Background="Transparent"
+                  Click="OnCommitWithAutoStage"
+                  HotKey="{OnPlatform Ctrl+Shift+Enter, macOS=⌘+Shift+Enter}">
+            <Button.IsEnabled>
+              <MultiBinding Converter="{x:Static BoolConverters.And}">
+                <Binding Path="IsCommitting" Converter="{x:Static BoolConverters.Not}"/>
+                <Binding Path="CommitMessage" Converter="{x:Static c:StringConverters.IsNotNullOrWhitespace}"/>
+              </MultiBinding>
+            </Button.IsEnabled>
+          </Button>
+
+          <Button Grid.Column="7"
+                  Classes="flat"
+                  Content="{DynamicResource Text.WorkingCopy.CommitAndPush}"
+                  Height="28"
+                  Margin="8,0,0,0"
+                  Padding="8,0"
+                  Click="OnCommitWithPush"
+                  HotKey="{OnPlatform Ctrl+Alt+Enter, macOS=⌘+Alt+Enter}"
+                  ToolTip.Tip="{OnPlatform Ctrl+Alt+Enter, macOS=⌘+⌥+Enter}"
+                  ToolTip.Placement="Top"
+                  ToolTip.VerticalOffset="0">
+            <Button.IsEnabled>
+              <MultiBinding Converter="{x:Static BoolConverters.And}">
+                <Binding Path="IsCommitting" Converter="{x:Static BoolConverters.Not}"/>
+                <Binding Path="CommitMessage" Converter="{x:Static c:StringConverters.IsNotNullOrWhitespace}"/>
+              </MultiBinding>
+            </Button.IsEnabled>
+
+            <Button.IsVisible>
+              <MultiBinding Converter="{x:Static BoolConverters.And}">
+                <Binding Path="HasRemotes"/>
+                <Binding Path="UseAmend" Converter="{x:Static BoolConverters.Not}"/>
+                <Binding Path="InProgressContext" Converter="{x:Static ObjectConverters.IsNull}"/>
+              </MultiBinding>
+            </Button.IsVisible>
+          </Button>
+        </Grid>
+        </Grid>
+      </Border>
     </Grid>
 
     <GridSplitter Grid.Column="1"
@@ -218,13 +436,7 @@
                   Focusable="False"/>
 
     <!-- Right -->
-    <Grid Grid.Column="2" Margin="4,4,6,0">
-      <Grid.RowDefinitions>
-        <RowDefinition Height="*" MinHeight="100"/>
-        <RowDefinition Height="4"/>
-        <RowDefinition Height="128" MinHeight="100"/>
-        <RowDefinition Height="40"/>
-      </Grid.RowDefinitions>
+    <Grid Grid.Column="2" Margin="4,4,6,4">
 
       <!-- Select Change Detail -->
       <Grid Grid.Row="0">
@@ -250,216 +462,6 @@
         </ContentControl>
       </Grid>
 
-      <!-- Splitter -->
-      <GridSplitter Grid.Row="1" MinHeight="1"
-                    HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
-                    Background="Transparent"
-                    Focusable="False"/>
-
-      <!-- Commit Message -->
-      <v:CommitMessageToolBox Grid.Row="2"
-                              ShowAdvancedOptions="True"
-                              CommitMessage="{Binding CommitMessage, Mode=TwoWay}"/>
-
-      <!-- Commit Options -->
-      <Grid Grid.Row="3" VerticalAlignment="Center" ColumnDefinitions="Auto,Auto,Auto,Auto,*,Auto,Auto,Auto">
-        <CheckBox Grid.Column="0"
-                  Height="24"
-                  Margin="1,0,0,0"
-                  HorizontalAlignment="Left"
-                  IsChecked="{Binding EnableSignOff, Mode=TwoWay}"
-                  Content="{DynamicResource Text.WorkingCopy.SignOff}"
-                  ToolTip.Tip="--signoff"
-                  ToolTip.Placement="Top"
-                  ToolTip.VerticalOffset="0"/>
-
-        <CheckBox Grid.Column="1"
-                  Height="24"
-                  Margin="12,0,0,0"
-                  HorizontalAlignment="Left"
-                  IsChecked="{Binding NoVerifyOnCommit, Mode=TwoWay}"
-                  Content="{DynamicResource Text.WorkingCopy.NoVerify}"
-                  ToolTip.Tip="--no-verify"
-                  ToolTip.Placement="Top"
-                  ToolTip.VerticalOffset="0"/>
-
-        <CheckBox Grid.Column="2"
-                  Height="24"
-                  Margin="12,0,0,0"
-                  HorizontalAlignment="Left"
-                  IsChecked="{Binding UseAmend, Mode=TwoWay}"
-                  Content="{DynamicResource Text.WorkingCopy.Amend}"
-                  ToolTip.Tip="--amend"
-                  ToolTip.Placement="Top"
-                  ToolTip.VerticalOffset="0"/>
-
-        <CheckBox Grid.Column="3"
-                  Height="24"
-                  Margin="12,0,0,0"
-                  HorizontalAlignment="Left"
-                  IsChecked="{Binding ResetAuthor, Mode=TwoWay}"
-                  IsVisible="{Binding UseAmend}"
-                  Content="{DynamicResource Text.WorkingCopy.ResetAuthor}"
-                  ToolTip.Tip="--reset-author"
-                  ToolTip.Placement="Top"
-                  ToolTip.VerticalOffset="0"/>
-
-        <v:LoadingIcon Grid.Column="4"
-                       Width="18" Height="18"
-                       HorizontalAlignment="Right"
-                       IsVisible="{Binding IsCommitting}"/>
-
-        <SplitButton Grid.Column="5"
-                     Content="{DynamicResource Text.Repository.Continue}"
-                     Height="28"
-                     Margin="8,0,0,0"
-                     Padding="8,0"
-                     Click="OnContinue"
-                     IsVisible="{Binding InProgressContext, Converter={x:Static ObjectConverters.IsNotNull}}">
-          <SplitButton.Styles>
-            <Style Selector="SplitButton">
-              <Setter Property="MinHeight" Value="24"/>
-              <Setter Property="Template">
-                <ControlTemplate>
-                  <Grid ColumnDefinitions="*,1,Auto">
-                    <Button x:Name="PART_PrimaryButton"
-                            Grid.Column="0"
-                            Classes="flat primary"
-                            MinWidth="32"
-                            HorizontalAlignment="Stretch"
-                            VerticalAlignment="Stretch"
-                            Content="{TemplateBinding Content}"
-                            ContentTemplate="{TemplateBinding ContentTemplate}"
-                            Command="{TemplateBinding Command}"
-                            CommandParameter="{TemplateBinding CommandParameter}"
-                            CornerRadius="3,0,0,3"
-                            Padding="{TemplateBinding Padding}"
-                            Focusable="False"
-                            KeyboardNavigation.IsTabStop="False" />
-
-                    <Button x:Name="PART_SecondaryButton"
-                            Grid.Column="2"
-                            Classes="flat primary"
-                            Width="32"
-                            CornerRadius="0,3,3,0"
-                            Padding="0"
-                            Focusable="False"
-                            HorizontalAlignment="Stretch"
-                            VerticalAlignment="Stretch"
-                            KeyboardNavigation.IsTabStop="False">
-                      <Path Height="12" Width="12"
-                            Margin="0,4,0,0"
-                            Fill="{DynamicResource AccentButtonForeground}"
-                            Data="{DynamicResource Icons.Down}"/>
-                    </Button>
-                  </Grid>
-                </ControlTemplate>
-              </Setter>
-
-              <Style Selector="^:disabled /template/ Button">
-                <Setter Property="BorderThickness" Value="1"/>
-                <Setter Property="BorderBrush" Value="{DynamicResource Brush.Border2}"/>
-                <Setter Property="Background" Value="Transparent"/>
-              </Style>
-
-              <Style Selector="^:disabled AccessText">
-                <Setter Property="Foreground" Value="{DynamicResource Brush.FG2}"/>
-              </Style>
-
-              <Style Selector="^:disabled Path">
-                <Setter Property="Fill" Value="{DynamicResource Brush.FG2}"/>
-              </Style>
-            </Style>
-          </SplitButton.Styles>
-
-          <SplitButton.IsEnabled>
-            <MultiBinding Converter="{x:Static BoolConverters.And}">
-              <Binding Path="IsCommitting" Converter="{x:Static BoolConverters.Not}"/>
-              <Binding Path="HasUnsolvedConflicts" Converter="{x:Static BoolConverters.Not}"/>
-            </MultiBinding>
-          </SplitButton.IsEnabled>
-          <SplitButton.Flyout>
-            <MenuFlyout>
-              <MenuItem Header="{DynamicResource Text.WorkingCopy.CommitToEdit}"
-                        Click="OnCommit"
-                        IsEnabled="{Binding CommitMessage, Converter={x:Static c:StringConverters.IsNotNullOrWhitespace}}"/>
-            </MenuFlyout>
-          </SplitButton.Flyout>
-        </SplitButton>
-
-        <Button Grid.Column="5"
-                Classes="flat primary"
-                Content="{DynamicResource Text.WorkingCopy.Commit}"
-                Height="28"
-                Margin="8,0,0,0"
-                Padding="8,0"
-                Click="OnCommit"
-                HotKey="{OnPlatform Ctrl+Enter, macOS=⌘+Enter}"
-                IsVisible="{Binding InProgressContext, Converter={x:Static ObjectConverters.IsNull}}"
-                ToolTip.Placement="Top"
-                ToolTip.VerticalOffset="0">
-          <ToolTip.Tip>
-            <StackPanel Orientation="Vertical">
-              <TextBlock TextAlignment="Left" TextWrapping="Wrap">
-                <Run Text="{OnPlatform Ctrl+Enter, macOS=⌘+Enter}"/>
-                <Run Foreground="{DynamicResource Brush.FG2}" Text="{DynamicResource Text.WorkingCopy.CommitTip}"/>
-              </TextBlock>
-              <TextBlock TextAlignment="Left" TextWrapping="Wrap" Margin="0,4,0,0">
-                <Run Text="{OnPlatform Ctrl+Shift+Enter, macOS=⌘+⇧+Enter}"/>
-                <Run Foreground="{DynamicResource Brush.FG2}" Text="{DynamicResource Text.WorkingCopy.CommitWithAutoStage}"/>
-              </TextBlock>
-            </StackPanel>
-          </ToolTip.Tip>
-
-          <Button.IsEnabled>
-            <MultiBinding Converter="{x:Static BoolConverters.And}">
-              <Binding Path="IsCommitting" Converter="{x:Static BoolConverters.Not}"/>
-              <Binding Path="CommitMessage" Converter="{x:Static c:StringConverters.IsNotNullOrWhitespace}"/>
-            </MultiBinding>
-          </Button.IsEnabled>
-        </Button>
-
-        <!-- Invisible button just to add another hotkey `Ctrl+Shift+Enter` to commit with auto-stage -->
-        <Button Grid.Column="6"
-                Width="0" Height="0"
-                Background="Transparent"
-                Click="OnCommitWithAutoStage"
-                HotKey="{OnPlatform Ctrl+Shift+Enter, macOS=⌘+Shift+Enter}">
-          <Button.IsEnabled>
-            <MultiBinding Converter="{x:Static BoolConverters.And}">
-              <Binding Path="IsCommitting" Converter="{x:Static BoolConverters.Not}"/>
-              <Binding Path="CommitMessage" Converter="{x:Static c:StringConverters.IsNotNullOrWhitespace}"/>
-            </MultiBinding>
-          </Button.IsEnabled>
-        </Button>
-
-        <Button Grid.Column="7"
-                Classes="flat"
-                Content="{DynamicResource Text.WorkingCopy.CommitAndPush}"
-                Height="28"
-                Margin="8,0,0,0"
-                Padding="8,0"
-                Click="OnCommitWithPush"
-                HotKey="{OnPlatform Ctrl+Alt+Enter, macOS=⌘+Alt+Enter}"
-                ToolTip.Tip="{OnPlatform Ctrl+Alt+Enter, macOS=⌘+⌥+Enter}"
-                ToolTip.Placement="Top"
-                ToolTip.VerticalOffset="0">
-          <Button.IsEnabled>
-            <MultiBinding Converter="{x:Static BoolConverters.And}">
-              <Binding Path="IsCommitting" Converter="{x:Static BoolConverters.Not}"/>
-              <Binding Path="CommitMessage" Converter="{x:Static c:StringConverters.IsNotNullOrWhitespace}"/>
-            </MultiBinding>
-          </Button.IsEnabled>
-
-          <Button.IsVisible>
-            <MultiBinding Converter="{x:Static BoolConverters.And}">
-              <Binding Path="HasRemotes"/>
-              <Binding Path="UseAmend" Converter="{x:Static BoolConverters.Not}"/>
-              <Binding Path="InProgressContext" Converter="{x:Static ObjectConverters.IsNull}"/>
-            </MultiBinding>
-          </Button.IsVisible>
-        </Button>
-      </Grid>
     </Grid>
   </Grid>
 </UserControl>
