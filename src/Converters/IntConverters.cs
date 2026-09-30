@@ -14,6 +14,9 @@ namespace SourceGit.Converters
         public static readonly FuncValueConverter<int, bool> IsZero =
             new(v => v == 0);
 
+        public static readonly FuncValueConverter<int, bool> IsNotZero =
+            new(v => v != 0);
+
         public static readonly FuncValueConverter<int, bool> IsOne =
             new(v => v == 1);
 

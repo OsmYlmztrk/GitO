@@ -88,6 +88,14 @@ namespace SourceGit.Views
             UpdateLeftSidebarLayout();
         }
 
+        private void OnNavigateTo(object sender, RoutedEventArgs e)
+        {
+            if (sender is Button { Tag: string tag } && DataContext is ViewModels.Repository repo && int.TryParse(tag, out var index))
+                repo.SelectedViewIndex = index;
+
+            e.Handled = true;
+        }
+
         private async void OnOpenConfigure(object sender, RoutedEventArgs e)
         {
             if (DataContext is ViewModels.Repository repo)

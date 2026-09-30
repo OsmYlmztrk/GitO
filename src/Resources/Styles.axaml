@@ -505,7 +505,8 @@
   </Style>
   <Style Selector="TextBlock.group_header_label">
     <Setter Property="Foreground" Value="{DynamicResource Brush.FG2}"/>
-    <Setter Property="FontWeight" Value="Bold"/>
+    <Setter Property="FontWeight" Value="SemiBold"/>
+    <Setter Property="FontSize" Value="11"/>
   </Style>
   <Style Selector="TextBlock.table_header">
     <Setter Property="Foreground" Value="{DynamicResource Brush.FG1}"/>
