@@ -88,6 +88,55 @@ namespace SourceGit.Views
             UpdateLeftSidebarLayout();
         }
 
+        // MyGitGUI: conflict radar toasts, sound and taskbar flash
+        protected override void OnDataContextChanged(EventArgs e)
+        {
+            if (_radar != null)
+                _radar.NewRisksDetected -= OnNewConflictRisks;
+
+            _radar = (DataContext as ViewModels.Repository)?.ConflictRadar;
+            if (_radar != null)
+                _radar.NewRisksDetected += OnNewConflictRisks;
+
+            base.OnDataContextChanged(e);
+        }
+
+        private void OnNewConflictRisks(System.Collections.Generic.List<Models.ConflictRisk> risks)
+        {
+            if (ViewModels.Preferences.Instance.ConflictRadarSound)
+                Native.Attention.PlayAlert(risks.Exists(x => x.IsHigh));
+
+            if (TopLevel.GetTopLevel(this) is Window { IsActive: false } window)
+                Native.Attention.FlashTaskbar(window.TryGetPlatformHandle()?.Handle ?? IntPtr.Zero);
+        }
+
+        private void OnConflictToastDismiss(object sender, RoutedEventArgs e)
+        {
+            if (sender is Control { DataContext: Models.ConflictRisk risk })
+                _radar?.DismissToast(risk);
+
+            e.Handled = true;
+        }
+
+        private void OnConflictToastIgnore(object sender, RoutedEventArgs e)
+        {
+            if (sender is Control { DataContext: Models.ConflictRisk risk })
+                _radar?.Ignore(risk);
+
+            e.Handled = true;
+        }
+
+        private void OnConflictToastGoToCommit(object sender, RoutedEventArgs e)
+        {
+            if (sender is Control { DataContext: Models.ConflictRisk risk } && _radar != null)
+            {
+                _radar.DismissToast(risk);
+                _radar.GoToCommit(risk);
+            }
+
+            e.Handled = true;
+        }
+
         private void OnNavigateTo(object sender, RoutedEventArgs e)
         {
             if (sender is Button { Tag: string tag } && DataContext is ViewModels.Repository repo && int.TryParse(tag, out var index))
@@ -553,5 +602,7 @@ namespace SourceGit.Views
         private bool _isCommitSearchPanelVisible = false;
         private double _sidebarMinWidth = 200;
         private GridLength _sidebarWidth;
+
+        private ViewModels.ConflictRadar _radar = null;
     }
 }

@@ -167,6 +167,12 @@
                   <Setter Property="CornerRadius" Value="8"/>
                   <Setter Property="Background" Value="{DynamicResource Brush.Accent}"/>
                 </Style>
+                <Style Selector="Border.nav_badge.radar">
+                  <Setter Property="Background" Value="#FFF0A33A"/>
+                </Style>
+                <Style Selector="Border.nav_badge.radar.danger">
+                  <Setter Property="Background" Value="#FFE5534B"/>
+                </Style>
                 <Style Selector="Border.nav_badge TextBlock">
                   <Setter Property="FontSize" Value="10"/>
                   <Setter Property="FontWeight" Value="SemiBold"/>
@@ -238,6 +244,31 @@
                 <Grid ColumnDefinitions="Auto,*">
                   <Path Grid.Column="0" Classes="nav_icon" Data="{StaticResource Icons.Lock}"/>
                   <TextBlock Grid.Column="1" Margin="8,0,0,0" Text="LFS Locks" TextTrimming="CharacterEllipsis"/>
+                </Grid>
+              </Button>
+
+              <!-- MyGitGUI: conflict radar -->
+              <Button Classes="nav_item" IsVisible="{Binding Remotes, Converter={x:Static c:ListConverters.IsNotNullOrEmpty}}">
+                <Button.Flyout>
+                  <Flyout Placement="RightEdgeAlignedTop">
+                    <v:ConflictRadarPanel DataContext="{Binding ConflictRadar}"/>
+                  </Flyout>
+                </Button.Flyout>
+                <ToolTip.Tip>
+                  <StackPanel MaxWidth="300" Spacing="4">
+                    <TextBlock Text="Çakışma Radarı" FontWeight="SemiBold"/>
+                    <TextBlock TextWrapping="Wrap" Foreground="{DynamicResource Brush.FG2}"
+                               Text="Değiştirdiğin dosyalar, ekip arkadaşlarının yakın zamanda push ettiği branch'lerde de değiştiyse uyarır."/>
+                  </StackPanel>
+                </ToolTip.Tip>
+                <Grid ColumnDefinitions="Auto,*,Auto,Auto">
+                  <Path Grid.Column="0" Classes="nav_icon" Data="{StaticResource Icons.Conflict}"/>
+                  <TextBlock Grid.Column="1" Margin="8,0,0,0" Text="Çakışma Radarı" TextTrimming="CharacterEllipsis"/>
+                  <v:LoadingIcon Grid.Column="2" Width="12" Height="12" Margin="0,0,6,0" IsVisible="{Binding ConflictRadar.IsScanning}"/>
+                  <Border Grid.Column="3" Classes="nav_badge radar" Classes.danger="{Binding ConflictRadar.HasHighRisk}"
+                          IsVisible="{Binding ConflictRadar.HasRisks}">
+                    <TextBlock Text="{Binding ConflictRadar.Count}"/>
+                  </Border>
                 </Grid>
               </Button>
 
@@ -831,5 +862,62 @@
         </Grid>
       </Border>
     </Border>
+
+    <!-- MyGitGUI: conflict radar toasts -->
+    <ItemsControl HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                  Margin="0,0,20,20" Width="380"
+                  ItemsSource="{Binding ConflictRadar.Toasts}">
+      <ItemsControl.ItemTemplate>
+        <DataTemplate DataType="m:ConflictRisk">
+          <Border Margin="0,8,0,0" Effect="drop-shadow(0 4 16 #90000000)">
+            <Border Padding="12,10" CornerRadius="8" BorderThickness="4,1,1,1"
+                    Background="{DynamicResource Brush.Popup}"
+                    Classes="toast" Classes.high="{Binding IsHigh}">
+              <Border.Styles>
+                <Style Selector="Border.toast">
+                  <Setter Property="BorderBrush" Value="#FFF0A33A"/>
+                </Style>
+                <Style Selector="Border.toast.high">
+                  <Setter Property="BorderBrush" Value="#FFE5534B"/>
+                </Style>
+              </Border.Styles>
+              <StackPanel Spacing="4">
+                <Grid ColumnDefinitions="Auto,*,Auto,Auto">
+                  <Path Grid.Column="0" Width="14" Height="14" Data="{StaticResource Icons.Conflict}" Fill="#FFF0A33A" IsVisible="{Binding !IsHigh}"/>
+                  <Path Grid.Column="0" Width="14" Height="14" Data="{StaticResource Icons.Conflict}" Fill="#FFE5534B" IsVisible="{Binding IsHigh}"/>
+                  <TextBlock Grid.Column="1" Margin="8,0,0,0" Text="Çakışma riski" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                  <Border Grid.Column="2" Padding="6,0" Height="18" CornerRadius="4" VerticalAlignment="Center" Margin="0,0,8,0"
+                          Background="#28E5534B" IsVisible="{Binding IsHigh}">
+                    <TextBlock Text="Yüksek" FontSize="11" FontWeight="SemiBold" Foreground="#FFF08A84" VerticalAlignment="Center"/>
+                  </Border>
+                  <Border Grid.Column="2" Padding="6,0" Height="18" CornerRadius="4" VerticalAlignment="Center" Margin="0,0,8,0"
+                          Background="#28F0A33A" IsVisible="{Binding !IsHigh}">
+                    <TextBlock Text="Orta" FontSize="11" FontWeight="SemiBold" Foreground="#FFF0A33A" VerticalAlignment="Center"/>
+                  </Border>
+                  <Button Grid.Column="3" Classes="icon_button" Width="18" Height="18" Click="OnConflictToastDismiss" ToolTip.Tip="Kapat">
+                    <Path Width="9" Height="9" Data="{StaticResource Icons.Close}"/>
+                  </Button>
+                </Grid>
+
+                <TextBlock TextTrimming="CharacterEllipsis">
+                  <Run Text="{Binding FileName}" FontWeight="SemiBold"/>
+                  <Run Text="  "/>
+                  <Run Text="{Binding Folder}" FontSize="11" Foreground="{DynamicResource Brush.FG2}"/>
+                </TextBlock>
+                <TextBlock Text="{Binding Summary}" TextWrapping="Wrap"/>
+                <TextBlock Text="{Binding YourSide}" TextWrapping="Wrap" FontSize="11" Foreground="{DynamicResource Brush.FG2}"/>
+                <TextBlock Text="{Binding Advice}" TextWrapping="Wrap" FontSize="11" Foreground="{DynamicResource Brush.FG2}"/>
+
+                <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,4,0,0">
+                  <Button Classes="flat primary" Height="26" Padding="10,0" FontSize="12" Content="Commit'e git" Click="OnConflictToastGoToCommit"/>
+                  <Button Classes="flat" Height="26" Padding="10,0" FontSize="12" Content="Yoksay" Click="OnConflictToastIgnore"
+                          ToolTip.Tip="Bu dosya ve branch için bu oturumda tekrar uyarma"/>
+                </StackPanel>
+              </StackPanel>
+            </Border>
+          </Border>
+        </DataTemplate>
+      </ItemsControl.ItemTemplate>
+    </ItemsControl>
   </Grid>
 </UserControl>

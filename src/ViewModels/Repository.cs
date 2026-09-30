@@ -88,6 +88,11 @@ namespace SourceGit.ViewModels
             get => _histories;
         }
 
+        public ConflictRadar ConflictRadar
+        {
+            get => _conflictRadar;
+        }
+
         public WorkingCopy WorkingCopy
         {
             get => _workingCopy;
@@ -447,6 +452,7 @@ namespace SourceGit.ViewModels
             _historyFilterMode = _uiStates.GetHistoryFilterMode();
             _histories = new Histories(this);
             _workingCopy = new WorkingCopy(this) { CommitMessage = _uiStates.LastCommitMessage };
+            _conflictRadar = new ConflictRadar(this);
             _stashesPage = new StashesPage(this);
             _selectedViewIndex = Preferences.Instance.ShowLocalChangesByDefault ? 1 : 0;
             _lastFetchTime = DateTime.Now;
@@ -462,6 +468,8 @@ namespace SourceGit.ViewModels
 
             _uiStates.LastCommitMessage = commitMessage;
             _uiStates.Save();
+
+            _conflictRadar?.Dispose();
 
             if (_cancellationRefreshBranches is { IsCancellationRequested: false })
                 _cancellationRefreshBranches.Cancel();
@@ -1128,6 +1136,7 @@ namespace SourceGit.ViewModels
                     Remotes = remotes;
                     Branches = branches;
                     CurrentBranch = branches.Find(x => x.IsCurrent);
+                    _conflictRadar?.SetBranches(branches);
                     LocalBranchTrees = builder.Locals;
                     RemoteBranchTrees = builder.Remotes;
 
@@ -1320,6 +1329,7 @@ namespace SourceGit.ViewModels
                         return;
 
                     _workingCopy.SetData(changes);
+                    _conflictRadar?.SetLocalChanges(changes);
                     LocalChangesCount = changes.Count;
                     OnPropertyChanged(nameof(InProgressContext));
                     GetOwnerPage()?.ChangeDirtyState(Models.DirtyState.HasLocalChanges, changes.Count == 0);
@@ -1924,6 +1934,7 @@ namespace SourceGit.ViewModels
         private Models.Watcher _watcher = null;
         private Histories _histories = null;
         private WorkingCopy _workingCopy = null;
+        private ConflictRadar _conflictRadar = null;
         private StashesPage _stashesPage = null;
         private int _selectedViewIndex = 0;
 

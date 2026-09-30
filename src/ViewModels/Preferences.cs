@@ -129,6 +129,11 @@ namespace SourceGit.ViewModels
             set;
         } = false;
 
+        // MyGitGUI: conflict radar (see ViewModels/ConflictRadar.cs).
+        public bool ConflictRadarEnabled { get; set; } = true;
+        public bool ConflictRadarSound { get; set; } = true;
+        public int ConflictRadarDays { get; set; } = 5;
+
         // MyGitGUI: tint branch names in the sidebar with their commit-graph lane color.
         public bool ColorBranchesByGraph
         {
@@ -258,7 +263,7 @@ namespace SourceGit.ViewModels
         {
             get;
             set;
-        } = false;
+        } = true; // MyGitGUI: on by default so the conflict radar sees teammates' pushes
 
         public int AutoFetchInterval
         {
