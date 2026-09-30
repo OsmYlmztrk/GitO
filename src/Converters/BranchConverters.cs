@@ -9,7 +9,7 @@ namespace SourceGit.Converters
         /// <summary>
         ///     MyGitGUI: brush of the commit-graph lane that a branch head sits on.
         ///     Values: [branch (object), head SHA -> lane color index, enabled (bool)].
-        ///     Returns UnsetValue (default foreground) when disabled or the head is not in the loaded graph.
+        ///     Falls back to the theme's normal text brush when disabled or the head is not in the loaded graph.
         /// </summary>
         public static readonly FuncMultiValueConverter<object, object> ToGraphBrush =
             new(values =>
@@ -30,13 +30,24 @@ namespace SourceGit.Converters
                 }
 
                 if (!enabled || colors == null || branch is not Models.Branch b || string.IsNullOrEmpty(b.Head))
-                    return AvaloniaProperty.UnsetValue;
+                    return DefaultBrush();
 
                 var pens = Models.CommitGraph.Pens;
                 if (pens.Count == 0 || !colors.TryGetValue(b.Head, out var color))
-                    return AvaloniaProperty.UnsetValue;
+                    return DefaultBrush();
 
                 return pens[color % pens.Count].Brush;
             });
+
+        // Returning UnsetValue from a MultiBinding leaves the text with a dark fallback color,
+        // so hand back the theme's regular foreground brush explicitly.
+        private static object DefaultBrush()
+        {
+            var app = Application.Current;
+            if (app != null && app.TryGetResource("Brush.FG1", app.ActualThemeVariant, out var brush))
+                return brush;
+
+            return AvaloniaProperty.UnsetValue;
+        }
     }
 }
