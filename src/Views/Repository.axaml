@@ -9,7 +9,17 @@
              mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
              x:Class="SourceGit.Views.Repository"
              x:DataType="vm:Repository"
-             x:Name="ThisControl">  
+             x:Name="ThisControl">
+  <UserControl.Styles>
+    <!-- MyGitGUI: sidebar sections sit in soft cards -->
+    <Style Selector="Border.side_card">
+      <Setter Property="CornerRadius" Value="8"/>
+      <Setter Property="Padding" Value="4"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource Brush.Border2}"/>
+      <Setter Property="Background" Value="{DynamicResource Brush.SubPanel}"/>
+    </Style>
+  </UserControl.Styles>  
   <Grid>
     <!-- Body -->
     <Border BorderThickness="0,1,0,0"
@@ -131,12 +141,13 @@
 
             <Grid Grid.Column="0" RowDefinitions="Auto,*">
             <!-- Fork-style navigation (replaces SourceGit's vertical page switcher) -->
-            <StackPanel Grid.Row="0" Orientation="Vertical" Margin="0,6,0,2">
+            <Border Grid.Row="0" Classes="side_card" Margin="8,8,8,6">
+            <StackPanel Orientation="Vertical" Spacing="2">
               <StackPanel.Styles>
                 <Style Selector="Button.nav_item">
-                  <Setter Property="Height" Value="26"/>
-                  <Setter Property="Margin" Value="4,0"/>
-                  <Setter Property="Padding" Value="8,0"/>
+                  <Setter Property="Height" Value="30"/>
+                  <Setter Property="Margin" Value="0"/>
+                  <Setter Property="Padding" Value="10,0"/>
                   <Setter Property="CornerRadius" Value="4"/>
                   <Setter Property="BorderThickness" Value="0"/>
                   <Setter Property="Background" Value="Transparent"/>
@@ -269,16 +280,16 @@
               </Button>
 
 
-              <Rectangle Height="1" Margin="0,6,0,0" Fill="{DynamicResource Brush.Border2}"/>
             </StackPanel>
+            </Border>
 
             <!-- Sidebar (Branches/Remotes/Tags/Submodules/Worktrees) -->
             <Grid Grid.Row="1" RowDefinitions="*,Auto" IsVisible="{Binding #ThisControl.IsNormalSidebarVisible, Mode=OneWay}">              
               <!-- Filter Branches/Tags/Submodules -->
               <TextBox Grid.Row="1"
                        x:Name="FilterBox"
-                       Height="24"
-                       Margin="6,4,4,6"
+                       Height="28"
+                       Margin="8,8,8,10"
                        BorderThickness="1"
                        CornerRadius="13"
                        BorderBrush="{DynamicResource Brush.Border2}"
@@ -307,7 +318,8 @@
                 </TextBox.InnerRightContent>
               </TextBox>
 
-              <Grid Grid.Row="0" x:Name="LeftSidebarGroups" Margin="0,4,0,0" RowDefinitions="28,Auto,28,Auto,28,Auto,28,Auto,28,Auto" SizeChanged="OnLeftSidebarSizeChanged">
+              <Border Grid.Row="0" Classes="side_card" Margin="8,0,8,0" Padding="2,6,2,6">
+              <Grid x:Name="LeftSidebarGroups" RowDefinitions="32,Auto,32,Auto,32,Auto,32,Auto,32,Auto" SizeChanged="OnLeftSidebarSizeChanged">
                 <!-- Local Branches -->
                 <ToggleButton Grid.Row="0" Classes="group_expander" IsChecked="{Binding IsLocalBranchGroupExpanded, Mode=TwoWay}">
                   <Grid ColumnDefinitions="16,*,Auto">
@@ -511,7 +523,7 @@
                   </ListBox.Styles>
                   <ListBox.ItemTemplate>
                     <DataTemplate DataType="vm:Worktree">
-                      <Border Height="24"
+                      <Border Height="26"
                               Background="Transparent"
                               DoubleTapped="OnWorktreeDoubleTapped"
                               ContextRequested="OnWorktreeContextRequested"
@@ -587,6 +599,7 @@
                   </ListBox.ItemTemplate>
                 </ListBox>
               </Grid>
+              </Border>
             </Grid>
 
             <!-- Commit Search Panel -->

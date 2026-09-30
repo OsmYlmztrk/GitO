@@ -722,7 +722,7 @@
     </Setter>
 
     <Style Selector="^ ListBoxItem">
-      <Setter Property="Height" Value="24"/>
+      <Setter Property="Height" Value="26"/>
       <Setter Property="Margin" Value="0"/>
       <Setter Property="Padding" Value="0"/>
 
@@ -1169,7 +1169,7 @@
   </Style>
 
   <Style Selector="ToggleButton.group_expander">
-    <Setter Property="Height" Value="28"/>
+    <Setter Property="Height" Value="32"/>
     <Setter Property="Margin" Value="6,0,0,0"/>
     <Setter Property="Padding" Value="0"/>
     <Setter Property="Background" Value="Transparent"/>

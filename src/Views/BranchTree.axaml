@@ -135,7 +135,7 @@
             </DataTemplate>
           </Border.DataTemplates>
 
-          <Grid Height="24"
+          <Grid Height="26"
                 Margin="{Binding Depth, Converter={x:Static c:IntConverters.ToTreeMargin}}"
                 ColumnDefinitions="16,*">
 
@@ -149,7 +149,7 @@
 
             <!-- Content Area (allows double-clicking) -->
             <Grid Grid.Column="1"
-                  Height="24"
+                  Height="26"
                   Background="Transparent"
                   ColumnDefinitions="18,*,Auto,Auto,Auto"
                   DoubleTapped="OnDoubleTappedBranchNode">

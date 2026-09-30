@@ -290,16 +290,16 @@ namespace SourceGit.Views
             if (DataContext is not ViewModels.Repository { UIStates: { } } vm)
                 return;
 
-            var leftHeight = LeftSidebarGroups.Bounds.Height - 28.0 * 5 - 4;
+            var leftHeight = LeftSidebarGroups.Bounds.Height - 32.0 * 5 - 4;
             if (leftHeight <= 0)
                 return;
 
             var localBranchRows = vm.IsLocalBranchGroupExpanded ? LocalBranchTree.Rows.Count : 0;
             var remoteBranchRows = vm.IsRemoteGroupExpanded ? RemoteBranchTree.Rows.Count : 0;
-            var desiredBranches = (localBranchRows + remoteBranchRows) * 24.0;
-            var desiredTag = vm.IsTagGroupExpanded ? 24.0 * TagsList.Rows : 0;
-            var desiredSubmodule = vm.IsSubmoduleGroupExpanded ? 24.0 * SubmoduleList.Rows : 0;
-            var desiredWorktree = vm.IsWorktreeGroupExpanded ? 24.0 * vm.Worktrees.Count : 0;
+            var desiredBranches = (localBranchRows + remoteBranchRows) * 26.0;
+            var desiredTag = vm.IsTagGroupExpanded ? 26.0 * TagsList.Rows : 0;
+            var desiredSubmodule = vm.IsSubmoduleGroupExpanded ? 26.0 * SubmoduleList.Rows : 0;
+            var desiredWorktree = vm.IsWorktreeGroupExpanded ? 26.0 * vm.Worktrees.Count : 0;
             var desiredOthers = desiredTag + desiredSubmodule + desiredWorktree;
             var hasOverflow = (desiredBranches + desiredOthers > leftHeight);
 
@@ -355,8 +355,8 @@ namespace SourceGit.Views
 
             if (leftHeight > 0 && desiredBranches > leftHeight)
             {
-                var local = localBranchRows * 24.0;
-                var remote = remoteBranchRows * 24.0;
+                var local = localBranchRows * 26.0;
+                var remote = remoteBranchRows * 26.0;
                 var half = leftHeight / 2;
                 if (vm.IsLocalBranchGroupExpanded)
                 {
@@ -392,13 +392,13 @@ namespace SourceGit.Views
             {
                 if (vm.IsLocalBranchGroupExpanded)
                 {
-                    var height = localBranchRows * 24;
+                    var height = localBranchRows * 26;
                     LocalBranchTree.Height = height;
                 }
 
                 if (vm.IsRemoteGroupExpanded)
                 {
-                    var height = remoteBranchRows * 24;
+                    var height = remoteBranchRows * 26;
                     RemoteBranchTree.Height = height;
                 }
             }

@@ -30,7 +30,7 @@
         </ListBox.Styles>
         <ListBox.ItemTemplate>
           <DataTemplate DataType="vm:TagTreeNode">
-            <Border Height="24"
+            <Border Height="26"
                     Background="Transparent"
                     PointerPressed="OnItemPointerPressed"
                     DoubleTapped="OnItemDoubleTapped"
@@ -76,7 +76,7 @@
         </ListBox.Styles>
         <ListBox.ItemTemplate>
           <DataTemplate DataType="vm:TagListItem">
-            <Border Height="24"
+            <Border Height="26"
                     Background="Transparent"
                     PointerPressed="OnItemPointerPressed"
                     DoubleTapped="OnItemDoubleTapped"

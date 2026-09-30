@@ -100,7 +100,7 @@
 
         <ListBox.ItemTemplate>
           <DataTemplate DataType="vm:SubmoduleTreeNode">
-            <Border Height="24"
+            <Border Height="26"
                     Background="Transparent"
                     DoubleTapped="OnItemDoubleTapped"
                     ContextRequested="OnItemContextRequested"
@@ -148,7 +148,7 @@
 
         <ListBox.ItemTemplate>
           <DataTemplate DataType="m:Submodule">
-            <Border Height="24"
+            <Border Height="26"
                     Background="Transparent"
                     DoubleTapped="OnItemDoubleTapped"
                     ContextRequested="OnItemContextRequested"
