@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Threading.Tasks;
 
 using Avalonia;
 using Avalonia.Collections;
@@ -448,7 +449,178 @@ namespace SourceGit.Views
             if (node.Backend is not Models.Branch branch)
                 return;
 
+            _pressedBranchEvent = e;
+            _isDraggingBranch = false;
             repo.NavigateToCommit(branch.Head);
+        }
+
+        // MyGitGUI: Fork-style drag & drop. Drop a branch onto a local branch to merge or rebase.
+        private void OnNodePointerReleased(object sender, PointerReleasedEventArgs e)
+        {
+            _pressedBranchEvent = null;
+            _isDraggingBranch = false;
+        }
+
+        private async void OnNodePointerMoved(object sender, PointerEventArgs e)
+        {
+            if (_pressedBranchEvent == null || _isDraggingBranch)
+                return;
+
+            if (sender is not Border { DataContext: ViewModels.BranchTreeNode { Backend: Models.Branch branch } } border)
+                return;
+
+            if (!e.GetCurrentPoint(border).Properties.IsLeftButtonPressed)
+            {
+                _pressedBranchEvent = null;
+                return;
+            }
+
+            var delta = e.GetPosition(border) - _pressedBranchEvent.GetPosition(border);
+            if (delta.X * delta.X + delta.Y * delta.Y < 64)
+                return;
+
+            _isDraggingBranch = true;
+
+            var data = new DataTransfer();
+            data.Add(DataTransferItem.Create(_dndBranchFormat, branch.FullName));
+            await DragDrop.DoDragDropAsync(_pressedBranchEvent, data, DragDropEffects.Link);
+
+            _pressedBranchEvent = null;
+            _isDraggingBranch = false;
+        }
+
+        private Models.Branch FindDropSource(DragEventArgs e, Models.Branch target)
+        {
+            if (DataContext is not ViewModels.Repository repo)
+                return null;
+
+            if (e.DataTransfer.TryGetValue(_dndBranchFormat) is not { Length: > 0 } fullName)
+                return null;
+
+            if (fullName.Equals(target.FullName, StringComparison.Ordinal))
+                return null;
+
+            return repo.Branches.Find(x => x.FullName.Equals(fullName, StringComparison.Ordinal));
+        }
+
+        private void OnNodeDragOver(object sender, DragEventArgs e)
+        {
+            if (sender is not Border { DataContext: ViewModels.BranchTreeNode { Backend: Models.Branch { IsLocal: true } target } } border ||
+                FindDropSource(e, target) == null)
+            {
+                e.DragEffects = DragDropEffects.None;
+                return;
+            }
+
+            border.Background = this.FindResource("Brush.AccentHovered") as IBrush;
+            e.DragEffects = DragDropEffects.Link;
+            e.Handled = true;
+        }
+
+        private void OnNodeDragLeave(object sender, DragEventArgs e)
+        {
+            if (sender is Border border)
+                border.Background = Brushes.Transparent;
+        }
+
+        private void OnNodeDrop(object sender, DragEventArgs e)
+        {
+            if (sender is not Border { DataContext: ViewModels.BranchTreeNode { Backend: Models.Branch { IsLocal: true } target } } border)
+                return;
+
+            border.Background = Brushes.Transparent;
+            e.Handled = true;
+
+            if (DataContext is not ViewModels.Repository { IsBare: false } repo || FindDropSource(e, target) is not { } source)
+                return;
+
+            var menu = new ContextMenu();
+
+            if (target.IsCurrent)
+            {
+                var merge = new MenuItem();
+                merge.Header = App.Text("BranchCM.Merge", source.FriendlyName, target.Name);
+                merge.Icon = this.CreateMenuIcon("Icons.Merge");
+                merge.Click += (_, ev) =>
+                {
+                    if (repo.CanCreatePopup())
+                        repo.ShowPopup(new ViewModels.Merge(repo, source, target.Name, false));
+                    ev.Handled = true;
+                };
+
+                var rebase = new MenuItem();
+                rebase.Header = App.Text("BranchCM.Rebase", target.Name, source.FriendlyName);
+                rebase.Icon = this.CreateMenuIcon("Icons.Rebase");
+                rebase.Click += (_, ev) =>
+                {
+                    if (repo.CanCreatePopup())
+                        repo.ShowPopup(new ViewModels.Rebase(repo, target, source));
+                    ev.Handled = true;
+                };
+
+                menu.Items.Add(merge);
+                menu.Items.Add(rebase);
+            }
+            else
+            {
+                var checkoutAndMerge = new MenuItem();
+                checkoutAndMerge.Header = $"Checkout '{target.Name}' and merge '{source.FriendlyName}' into it...";
+                checkoutAndMerge.Icon = this.CreateMenuIcon("Icons.Merge");
+                checkoutAndMerge.Click += async (_, ev) =>
+                {
+                    ev.Handled = true;
+                    await CheckoutThenMergeAsync(repo, target, source);
+                };
+                menu.Items.Add(checkoutAndMerge);
+
+                if (source.IsCurrent)
+                {
+                    var mergeIntoCurrent = new MenuItem();
+                    mergeIntoCurrent.Header = App.Text("BranchCM.Merge", target.Name, source.Name);
+                    mergeIntoCurrent.Icon = this.CreateMenuIcon("Icons.Merge");
+                    mergeIntoCurrent.Click += (_, ev) =>
+                    {
+                        if (repo.CanCreatePopup())
+                            repo.ShowPopup(new ViewModels.Merge(repo, target, source.Name, false));
+                        ev.Handled = true;
+                    };
+
+                    var rebaseCurrent = new MenuItem();
+                    rebaseCurrent.Header = App.Text("BranchCM.Rebase", source.Name, target.Name);
+                    rebaseCurrent.Icon = this.CreateMenuIcon("Icons.Rebase");
+                    rebaseCurrent.Click += (_, ev) =>
+                    {
+                        if (repo.CanCreatePopup())
+                            repo.ShowPopup(new ViewModels.Rebase(repo, source, target));
+                        ev.Handled = true;
+                    };
+
+                    menu.Items.Add(new MenuItem() { Header = "-" });
+                    menu.Items.Add(mergeIntoCurrent);
+                    menu.Items.Add(rebaseCurrent);
+                }
+            }
+
+            menu.Open(border);
+        }
+
+        private static async Task CheckoutThenMergeAsync(ViewModels.Repository repo, Models.Branch target, Models.Branch source)
+        {
+            await repo.CheckoutBranchAsync(target);
+
+            // Checkout runs as a popup; wait briefly for HEAD to move. If it needs user input
+            // (e.g. local changes), the merge step is skipped and the user can drag again.
+            for (var i = 0; i < 50; i++)
+            {
+                if (repo.CurrentBranch is { } current && current.FullName.Equals(target.FullName, StringComparison.Ordinal))
+                {
+                    if (repo.CanCreatePopup())
+                        repo.ShowPopup(new ViewModels.Merge(repo, source, current.Name, false));
+                    return;
+                }
+
+                await Task.Delay(100);
+            }
         }
 
         private void OnNodesSelectionChanged(object _, SelectionChangedEventArgs e)
@@ -1427,5 +1599,8 @@ namespace SourceGit.Views
 
         private List<ViewModels.BranchTreeNode> _nodes = null;
         private bool _disableSelectionChangingEvent = false;
+        private PointerPressedEventArgs _pressedBranchEvent = null;
+        private bool _isDraggingBranch = false;
+        private readonly DataFormat<string> _dndBranchFormat = DataFormat.CreateStringApplicationFormat("mygitgui-dnd-branch");
     }
 }
