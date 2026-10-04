@@ -601,7 +601,6 @@ void SGitBlueprintMergeWindow::Construct(const FArguments& InArgs)
 
 	if (!SelectConflict(1, false))
 	{
-		ListTab = 1;
 		if (ChangeRows.Num() > 0)
 			ChangeList->SetSelection(ChangeRows[0]);
 		else
@@ -687,7 +686,6 @@ void SGitBlueprintMergeWindow::RebuildLayout()
 	if (SelectedRow.IsValid())
 	{
 		const bool bConflict = SelectedRow->Kind == ERowKind::Conflict;
-		ListTab = bConflict ? 0 : 1;
 		const TSharedPtr<SListView<TSharedPtr<FRow>>>& Owner = bConflict ? List : ChangeList;
 		Owner->SetSelection(SelectedRow);
 		Owner->RequestScrollIntoView(SelectedRow);
@@ -764,53 +762,67 @@ TSharedRef<SWidget> SGitBlueprintMergeWindow::MakeChangesPanel()
 		.BorderImage(FAppStyle::GetBrush("Brushes.Recessed"))
 		.Padding(6.0f)
 		[
-			SNew(SVerticalBox)
-
-			+ SVerticalBox::Slot()
-			.AutoHeight()
-			.Padding(0.0f, 0.0f, 0.0f, 6.0f)
-			[
-				SNew(SWrapBox)
-				.UseAllottedSize(true)
-				.InnerSlotPadding(FVector2D(4.0f, 4.0f))
-
-				+ SWrapBox::Slot()
-				[
-					MakeTabButton(0, FText::Format(LOCTEXT("ConflictsTab", "Conflicts ({0})"), ConflictRows.Num()))
-				]
-
-				+ SWrapBox::Slot()
-				[
-					MakeTabButton(1, FText::Format(LOCTEXT("ChangesTab", "Merged automatically ({0})"), ChangeRows.Num()))
-				]
-			]
-
-			+ SVerticalBox::Slot()
-			.FillHeight(1.0f)
-			[
-				SNew(SWidgetSwitcher)
-				.WidgetIndex_Lambda([this]() { return ListTab; })
-
-				+ SWidgetSwitcher::Slot()
-				[
-					SAssignNew(List, SListView<TSharedPtr<FRow>>)
-					.Orientation(bCardsSideBySide ? Orient_Horizontal : Orient_Vertical)
-					.ListItemsSource(&ConflictRows)
-					.SelectionMode(ESelectionMode::Single)
-					.OnGenerateRow(this, &SGitBlueprintMergeWindow::OnGenerateRow)
-					.OnSelectionChanged(this, &SGitBlueprintMergeWindow::OnSelectionChanged)
-				]
-
-				+ SWidgetSwitcher::Slot()
-				[
-					SAssignNew(ChangeList, SListView<TSharedPtr<FRow>>)
-					.ListItemsSource(&ChangeRows)
-					.SelectionMode(ESelectionMode::Single)
-					.OnGenerateRow(this, &SGitBlueprintMergeWindow::OnGenerateRow)
-					.OnSelectionChanged(this, &SGitBlueprintMergeWindow::OnSelectionChanged)
-				]
-			]
+			MakeChangesSplitter()
 		];
+}
+
+TSharedRef<SWidget> SGitBlueprintMergeWindow::MakeChangesSplitter()
+{
+	// Conflicts and what merged on its own, both in view: stacked in a side list, next to each other in the top strip.
+	const TSharedRef<SWidget> Conflicts = SNew(SVerticalBox)
+		+ SVerticalBox::Slot()
+		.AutoHeight()
+		[
+			MakeSectionHeader(FText::Format(LOCTEXT("ConflictsHeader", "Conflicts ({0})"), ConflictRows.Num()),
+				LOCTEXT("ConflictsHeaderTip", "Both branches changed these; pick a side for each."))
+		]
+		+ SVerticalBox::Slot()
+		.FillHeight(1.0f)
+		[
+			SAssignNew(List, SListView<TSharedPtr<FRow>>)
+			.Orientation(bCardsSideBySide ? Orient_Horizontal : Orient_Vertical)
+			.ListItemsSource(&ConflictRows)
+			.SelectionMode(ESelectionMode::Single)
+			.OnGenerateRow(this, &SGitBlueprintMergeWindow::OnGenerateRow)
+			.OnSelectionChanged(this, &SGitBlueprintMergeWindow::OnSelectionChanged)
+		];
+
+	const TSharedRef<SWidget> Changes = SNew(SVerticalBox)
+		+ SVerticalBox::Slot()
+		.AutoHeight()
+		[
+			MakeSectionHeader(FText::Format(LOCTEXT("ChangesHeader", "Merged automatically ({0})"), ChangeRows.Num()),
+				LOCTEXT("ChangesHeaderTip", "Only one branch changed these (or both the same way); they are taken as is."))
+		]
+		+ SVerticalBox::Slot()
+		.FillHeight(1.0f)
+		[
+			SAssignNew(ChangeList, SListView<TSharedPtr<FRow>>)
+			.ListItemsSource(&ChangeRows)
+			.SelectionMode(ESelectionMode::Single)
+			.OnGenerateRow(this, &SGitBlueprintMergeWindow::OnGenerateRow)
+			.OnSelectionChanged(this, &SGitBlueprintMergeWindow::OnSelectionChanged)
+		];
+
+	if (ConflictRows.Num() == 0)
+		return Changes;
+	if (ChangeRows.Num() == 0)
+		return Conflicts;
+
+	return SNew(SSplitter)
+		.Orientation(bCardsSideBySide ? Orient_Horizontal : Orient_Vertical)
+		.PhysicalSplitterHandleSize(4.0f)
+		+ SSplitter::Slot().Value(bCardsSideBySide ? 0.65f : 0.5f)[Conflicts]
+		+ SSplitter::Slot().Value(bCardsSideBySide ? 0.35f : 0.5f)[Changes];
+}
+
+TSharedRef<SWidget> SGitBlueprintMergeWindow::MakeSectionHeader(const FText& Label, const FText& Tip) const
+{
+	return SNew(STextBlock)
+		.Margin(FMargin(4.0f, 2.0f, 4.0f, 6.0f))
+		.Text(Label)
+		.ToolTipText(Tip)
+		.Font(FCoreStyle::GetDefaultFontStyle("Bold", 10));
 }
 
 TSharedRef<SWidget> SGitBlueprintMergeWindow::MakeLayoutSwitcher()
@@ -893,20 +905,6 @@ TSharedRef<ITableRow> SGitBlueprintMergeWindow::OnGenerateRow(TSharedPtr<FRow> R
 					MakeConflictRow(Row)
 				]
 			]
-		];
-}
-
-TSharedRef<SWidget> SGitBlueprintMergeWindow::MakeTabButton(int32 Tab, const FText& Label)
-{
-	return SNew(SCheckBox)
-		.Style(FAppStyle::Get(), "ToggleButtonCheckbox")
-		.Padding(FMargin(12.0f, 4.0f))
-		.IsChecked_Lambda([this, Tab]() { return ListTab == Tab ? ECheckBoxState::Checked : ECheckBoxState::Unchecked; })
-		.OnCheckStateChanged_Lambda([this, Tab](ECheckBoxState) { ListTab = Tab; })
-		[
-			SNew(STextBlock)
-			.Text(Label)
-			.Font(FCoreStyle::GetDefaultFontStyle("Bold", 10))
 		];
 }
 
@@ -1798,7 +1796,6 @@ bool SGitBlueprintMergeWindow::SelectConflict(int32 Direction, bool bOnlyOpen)
 			continue;
 
 		const TSharedPtr<FRow>& Row = ConflictRows[Candidate];
-		ListTab = 0;
 		List->SetSelection(Row);
 		List->RequestScrollIntoView(Row);
 		return true;

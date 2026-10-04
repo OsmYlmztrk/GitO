@@ -79,11 +79,11 @@ private:
 	TSharedRef<SWidget> MakeLayout(int32 Index);
 	TSharedRef<SWidget> MakeLayoutSwitcher();
 	TSharedRef<SWidget> MakeChangesPanel();
+	TSharedRef<SWidget> MakeChangesSplitter();
 	TSharedRef<SWidget> MakeBaseColumn();
 
 	TSharedRef<ITableRow> OnGenerateRow(TSharedPtr<FRow> Row, const TSharedRef<STableViewBase>& Owner);
-	/** Tab over the changes strip: 0 conflicts, 1 merged automatically. */
-	TSharedRef<SWidget> MakeTabButton(int32 Tab, const FText& Label);
+	TSharedRef<SWidget> MakeSectionHeader(const FText& Label, const FText& Tip) const;
 	TSharedRef<SWidget> MakeConflictRow(const TSharedPtr<FRow>& Row);
 	TSharedRef<SWidget> MakeChangeRow(const TSharedPtr<FRow>& Row);
 	TSharedRef<SWidget> MakeSideLine(int32 Group, GitBlueprintMerge::EResolution Side, const FString& Text);
@@ -139,7 +139,6 @@ private:
 	TSharedPtr<SListView<TSharedPtr<FRow>>> ChangeList;
 	/** The row shown in the graphs, from either list. */
 	TSharedPtr<FRow> SelectedRow;
-	int32 ListTab = 0;
 	TSharedPtr<SBox> MainArea;
 	int32 LayoutIndex = 0;
 	bool bCardsSideBySide = true;
