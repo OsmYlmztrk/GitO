@@ -1,0 +1,101 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="using:SourceGit.ViewModels"
+             mc:Ignorable="d" d:DesignWidth="500" d:DesignHeight="300"
+             x:Class="SourceGit.Views.UnrealMerge"
+             x:DataType="vm:UnrealMerge">
+  <!-- MyGitGUI: step-by-step progress of merging an Unreal asset. -->
+  <UserControl.Styles>
+    <Style Selector="TextBlock.faded">
+      <Setter Property="Opacity" Value="0.55"/>
+    </Style>
+    <Style Selector="TextBlock.skipped">
+      <Setter Property="Opacity" Value="0.55"/>
+      <Setter Property="TextDecorations" Value="Strikethrough"/>
+    </Style>
+  </UserControl.Styles>
+
+  <StackPanel Orientation="Vertical" Margin="8,0">
+    <Grid ColumnDefinitions="Auto,*,Auto">
+      <Path Grid.Column="0" Width="16" Height="16" Data="{StaticResource Icons.Merge}"/>
+      <TextBlock Grid.Column="1"
+                 FontSize="18"
+                 Margin="8,0,0,0"
+                 Classes="bold"
+                 TextTrimming="CharacterEllipsis"
+                 Text="{Binding Title}"/>
+      <TextBlock Grid.Column="2"
+                 VerticalAlignment="Center"
+                 Foreground="{DynamicResource Brush.FG2}"
+                 Text="{Binding Elapsed}"
+                 ToolTip.Tip="Elapsed time"/>
+    </Grid>
+
+    <!-- Which branch is which -->
+    <StackPanel Orientation="Horizontal" Margin="24,8,0,0" Spacing="6">
+      <Border Background="#FF2F7BF5" CornerRadius="3" Padding="6,1" VerticalAlignment="Center">
+        <TextBlock Text="OURS" FontSize="10" FontWeight="Bold" Foreground="White"/>
+      </Border>
+      <TextBlock VerticalAlignment="Center" Text="{Binding OursLabel}"/>
+      <Border Background="#FFF2994A" CornerRadius="3" Padding="6,1" Margin="12,0,0,0" VerticalAlignment="Center">
+        <TextBlock Text="THEIRS" FontSize="10" FontWeight="Bold" Foreground="White"/>
+      </Border>
+      <TextBlock VerticalAlignment="Center" Text="{Binding TheirsLabel}"/>
+    </StackPanel>
+
+    <!-- Steps -->
+    <ItemsControl Margin="0,16,0,0" ItemsSource="{Binding Steps}">
+      <ItemsControl.ItemTemplate>
+        <DataTemplate DataType="vm:UnrealMergeStep">
+          <Grid ColumnDefinitions="24,*,Auto" Margin="0,5">
+            <Grid Grid.Column="0" Width="14" Height="14" VerticalAlignment="Top" Margin="0,2,0,0">
+              <Ellipse Width="9" Height="9" StrokeThickness="1.5" Stroke="{DynamicResource Brush.FG2}" IsVisible="{Binding IsPending}"/>
+              <Path Width="13" Height="13" Classes="rotating" Fill="{DynamicResource Brush.Accent}" IsVisible="{Binding IsRunning}"/>
+              <Path Width="14" Height="14" Data="{StaticResource Icons.Check}" Fill="#FF3CB371" IsVisible="{Binding IsDone}"/>
+              <Path Width="12" Height="12" Data="{StaticResource Icons.Skip}" Fill="{DynamicResource Brush.FG2}" IsVisible="{Binding IsSkipped}"/>
+              <Path Width="13" Height="13" Data="{StaticResource Icons.Error}" Fill="#FFE5484D" IsVisible="{Binding IsFailed}"/>
+            </Grid>
+
+            <StackPanel Grid.Column="1" Orientation="Vertical">
+              <TextBlock Text="{Binding Title}"
+                         TextWrapping="Wrap"
+                         Classes.bold="{Binding IsRunning}"
+                         Classes.faded="{Binding IsPending}"
+                         Classes.skipped="{Binding IsSkipped}"/>
+              <TextBlock Margin="0,2,0,0"
+                         FontSize="11"
+                         TextWrapping="Wrap"
+                         Foreground="{DynamicResource Brush.FG2}"
+                         Text="{Binding Detail}"
+                         IsVisible="{Binding Detail, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+            </StackPanel>
+
+            <TextBlock Grid.Column="2"
+                       Margin="8,0,0,0"
+                       FontSize="11"
+                       VerticalAlignment="Top"
+                       Foreground="{DynamicResource Brush.FG2}"
+                       Text="{Binding Time}"/>
+          </Grid>
+        </DataTemplate>
+      </ItemsControl.ItemTemplate>
+    </ItemsControl>
+
+    <!-- What to do right now -->
+    <Border Margin="0,12,0,4"
+            Padding="10,8"
+            CornerRadius="6"
+            Background="{DynamicResource Brush.Contents}"
+            BorderBrush="{DynamicResource Brush.Border1}"
+            BorderThickness="1"
+            IsVisible="{Binding Hint, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+      <Grid ColumnDefinitions="Auto,*">
+        <Path Grid.Column="0" Width="14" Height="14" VerticalAlignment="Top" Margin="0,2,0,0"
+              Data="{StaticResource Icons.Info}" Fill="{DynamicResource Brush.Accent}"/>
+        <TextBlock Grid.Column="1" Margin="8,0,0,0" TextWrapping="Wrap" Text="{Binding Hint}"/>
+      </Grid>
+    </Border>
+  </StackPanel>
+</UserControl>

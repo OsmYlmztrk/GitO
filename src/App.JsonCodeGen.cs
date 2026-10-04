@@ -61,6 +61,7 @@ namespace SourceGit
             typeof(GridLengthConverter),
         ]
     )]
+    [JsonSerializable(typeof(Models.BlueprintMergeReport))]
     [JsonSerializable(typeof(Models.ConflictRadarStore))]
     [JsonSerializable(typeof(Models.LFSVerifiedLocks))]
     [JsonSerializable(typeof(Models.ExternalToolCustomization))]

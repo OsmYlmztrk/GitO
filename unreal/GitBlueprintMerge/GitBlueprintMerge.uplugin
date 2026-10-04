@@ -1,0 +1,19 @@
+{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "0.1.0",
+	"FriendlyName": "Git Blueprint Merge",
+	"Description": "Three-way merge for Blueprint assets, run from the command line by MyGitGUI.",
+	"Category": "Editor",
+	"CreatedBy": "MyGitGUI",
+	"EnabledByDefault": true,
+	"CanContainContent": false,
+	"Installed": false,
+	"Modules": [
+		{
+			"Name": "GitBlueprintMerge",
+			"Type": "Editor",
+			"LoadingPhase": "Default"
+		}
+	]
+}

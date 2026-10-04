@@ -100,6 +100,16 @@ namespace SourceGit
             return Models.ConfirmEmptyCommitResult.Cancel;
         }
 
+        // MyGitGUI: a long operation finished while the user was in another app (e.g. Unreal): flash the taskbar button and chime.
+        public static void RequestAttention()
+        {
+            if (Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime { MainWindow: { IsActive: false } main })
+            {
+                Native.Attention.FlashTaskbar(main.TryGetPlatformHandle()?.Handle ?? IntPtr.Zero);
+                Native.Attention.PlayAlert(false);
+            }
+        }
+
         public static void SetLocale(string localeKey)
         {
             var locale = Models.Locale.Supported.Find(x => x.Key.Equals(localeKey, StringComparison.OrdinalIgnoreCase));

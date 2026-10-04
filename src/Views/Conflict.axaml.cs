@@ -56,6 +56,38 @@ namespace SourceGit.Views
             e.Handled = true;
         }
 
+        private async void OnCompareInUnreal(object _, RoutedEventArgs e)
+        {
+            e.Handled = true;
+
+            if (DataContext is ViewModels.Conflict vm)
+                await vm.CompareInUnrealAsync();
+        }
+
+        private async void OnMergeInUnreal(object _, RoutedEventArgs e)
+        {
+            e.Handled = true;
+
+            if (DataContext is ViewModels.Conflict vm)
+                await vm.MergeInUnrealAsync();
+        }
+
+        private async void OnResolveInUnreal(object _, RoutedEventArgs e)
+        {
+            e.Handled = true;
+
+            if (DataContext is ViewModels.Conflict vm)
+                await vm.ResolveInUnrealAsync();
+        }
+
+        private async void OnOpenUnrealMergeTool(object _, RoutedEventArgs e)
+        {
+            e.Handled = true;
+
+            if (DataContext is ViewModels.Conflict vm)
+                await vm.OpenUnrealMergeToolAsync();
+        }
+
         private async void OnLock(object _, RoutedEventArgs e)
         {
             if (DataContext is ViewModels.Conflict vm)

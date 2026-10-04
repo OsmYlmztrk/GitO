@@ -36,6 +36,45 @@
       <Setter Property="FontWeight" Value="Bold"/>
       <Setter Property="VerticalAlignment" Value="Center"/>
     </Style>
+    <!-- MyGitGUI: Unreal card -->
+    <Style Selector="TextBlock.how">
+      <Setter Property="FontSize" Value="11"/>
+      <Setter Property="TextWrapping" Value="Wrap"/>
+      <Setter Property="Foreground" Value="{DynamicResource Brush.FG2}"/>
+    </Style>
+    <Style Selector="Border.status">
+      <Setter Property="Padding" Value="10,8"/>
+      <Setter Property="CornerRadius" Value="6"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource Brush.Border1}"/>
+      <Setter Property="Background" Value="{DynamicResource Brush.Contents}"/>
+    </Style>
+    <Style Selector="Border.status.error">
+      <Setter Property="BorderBrush" Value="#80E5484D"/>
+      <Setter Property="Background" Value="#1FE5484D"/>
+    </Style>
+    <Style Selector="Border.side_tag">
+      <Setter Property="Height" Value="18"/>
+      <Setter Property="CornerRadius" Value="3"/>
+      <Setter Property="Background" Value="#FF6B6B80"/>
+      <Setter Property="VerticalAlignment" Value="Top"/>
+    </Style>
+    <Style Selector="Border.side_tag.ours">
+      <Setter Property="Background" Value="#FF2F7BF5"/>
+    </Style>
+    <Style Selector="Border.side_tag.theirs">
+      <Setter Property="Background" Value="#FFF2994A"/>
+    </Style>
+    <Style Selector="Border.side_tag.conflict">
+      <Setter Property="Background" Value="#FFE5484D"/>
+    </Style>
+    <Style Selector="Border.side_tag TextBlock">
+      <Setter Property="FontSize" Value="10"/>
+      <Setter Property="FontWeight" Value="Bold"/>
+      <Setter Property="Foreground" Value="White"/>
+      <Setter Property="HorizontalAlignment" Value="Center"/>
+      <Setter Property="VerticalAlignment" Value="Center"/>
+    </Style>
     <Style Selector="TextBlock.kv_key">
       <Setter Property="Width" Value="56"/>
       <Setter Property="FontSize" Value="11"/>
@@ -186,6 +225,147 @@
               </StackPanel>
             </Border>
           </UniformGrid>
+
+          <!-- Unreal Editor -->
+          <Border Classes="card" IsVisible="{Binding IsUnrealAsset}">
+            <StackPanel Orientation="Vertical" Spacing="8">
+              <Grid ColumnDefinitions="Auto,Auto,*,Auto">
+                <Path Grid.Column="0" Width="14" Height="14" Data="{StaticResource Icons.Diff}"/>
+                <TextBlock Grid.Column="1" Margin="8,0,0,0" Text="Unreal Editor" FontWeight="SemiBold"/>
+                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" IsVisible="{Binding HasMergePlugin}">
+                  <Border Classes="chip"
+                          BorderBrush="{DynamicResource Brush.Border2}"
+                          ToolTip.Tip="The GitBlueprintMerge plugin is installed for this project's Unreal version.">
+                    <TextBlock Text="Asset merge"/>
+                  </Border>
+
+                  <!-- Which asset types the plugin merges, so a fallback to Unreal's window is not a surprise -->
+                  <Button Classes="icon_button" Margin="4,0,0,0" VerticalAlignment="Center"
+                          ToolTip.Tip="Which asset types can be merged">
+                    <Button.Flyout>
+                      <Flyout Placement="BottomEdgeAlignedLeft">
+                        <Border Width="560" Padding="4">
+                          <Border.Styles>
+                            <Style Selector="TextBlock.how">
+                              <Setter Property="FontSize" Value="11"/>
+                              <Setter Property="TextWrapping" Value="Wrap"/>
+                              <Setter Property="Foreground" Value="{DynamicResource Brush.FG2}"/>
+                            </Style>
+                            <Style Selector="TextBlock.support_head">
+                              <Setter Property="FontSize" Value="11"/>
+                              <Setter Property="FontWeight" Value="SemiBold"/>
+                              <Setter Property="Margin" Value="0,4,0,0"/>
+                            </Style>
+                            <Style Selector="TextBlock.support_kind">
+                              <Setter Property="FontSize" Value="11"/>
+                              <Setter Property="FontWeight" Value="Medium"/>
+                              <Setter Property="Margin" Value="0,0,12,2"/>
+                            </Style>
+                          </Border.Styles>
+                          <StackPanel Orientation="Vertical" Spacing="6">
+                            <TextBlock Text="What Merge in Unreal can combine" FontWeight="SemiBold"/>
+
+                            <TextBlock Classes="support_head" Text="Merged change by change"/>
+                            <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto,Auto">
+                              <TextBlock Grid.Row="0" Grid.Column="0" Classes="support_kind" Text="Blueprint"/>
+                              <TextBlock Grid.Row="0" Grid.Column="1" Classes="how" Text="Nodes, connections, variables, function graphs, class defaults, settings of existing components"/>
+                              <TextBlock Grid.Row="1" Grid.Column="0" Classes="support_kind" Text="Data Asset"/>
+                              <TextBlock Grid.Row="1" Grid.Column="1" Classes="how" Text="Every property; fields of a struct one by one"/>
+                              <TextBlock Grid.Row="2" Grid.Column="0" Classes="support_kind" Text="Data Table"/>
+                              <TextBlock Grid.Row="2" Grid.Column="1" Classes="how" Text="Added and removed rows, every field of a row"/>
+                              <TextBlock Grid.Row="3" Grid.Column="0" Classes="support_kind" Text="Material Instance"/>
+                              <TextBlock Grid.Row="3" Grid.Column="1" Classes="how" Text="Parameter overrides, static switches, parent, base property overrides"/>
+                            </Grid>
+
+                            <TextBlock Classes="support_head" Text="Listed for you to redo by hand"/>
+                            <TextBlock Classes="how" Text="•  Blueprint: added or removed event graphs and macros, added / removed / moved components, interfaces, parent class"/>
+                            <TextBlock Classes="how" Text="•  Widget layout (WBP) and AnimGraph (ABP): only their event graphs are merged"/>
+                            <TextBlock Classes="how" Text="•  Arrays, maps and sets count as one value; instanced subobjects, material layers and the row structure of a table are not merged"/>
+
+                            <TextBlock Classes="support_head" Text="Not supported: Unreal's merge window opens (keep one side)"/>
+                            <TextBlock Classes="how" Text="Materials, levels (.umap), Behavior Trees, Sound Cues, Niagara, Sequences, meshes, textures and other asset types"/>
+                          </StackPanel>
+                        </Border>
+                      </Flyout>
+                    </Button.Flyout>
+                    <Path Width="12" Height="12" Data="{StaticResource Icons.Info}" Fill="{DynamicResource Brush.FG2}"/>
+                  </Button>
+                </StackPanel>
+                <v:LoadingIcon Grid.Column="3" Width="14" Height="14" IsVisible="{Binding IsUnrealBusy}"/>
+              </Grid>
+
+              <!-- What Merge does, so pressing it is not a leap of faith -->
+              <StackPanel Orientation="Vertical" Spacing="2" IsVisible="{Binding HasMergePlugin}">
+                <TextBlock Classes="how" Text="Merge in Unreal combines both branches for you:"/>
+                <TextBlock Classes="how" Text="1.  Unreal merges the asset in the background, change by change."/>
+                <TextBlock Classes="how" Text="2.  If both branches changed the same thing, a window opens in Unreal to keep ours or take theirs for each conflict."/>
+                <TextBlock Classes="how" Text="3.  The result is saved and staged. Each step is shown while it runs."/>
+              </StackPanel>
+              <TextBlock Classes="how"
+                         IsVisible="{Binding !HasMergePlugin}"
+                         Text="Compare shows Ours and Theirs side by side in Unreal. Merge opens Unreal's merge window, which can only keep one side. Install the GitBlueprintMerge plugin (unreal/build-plugin.ps1) to merge Blueprints, Data Assets, Data Tables and Material Instances change by change."/>
+
+              <StackPanel Orientation="Horizontal" Spacing="8">
+                <Button Classes="flat" Height="28" Padding="10,0" Click="OnCompareInUnreal" IsEnabled="{Binding CanOpenInUnreal}"
+                        ToolTip.Tip="Open Unreal's diff with Ours on the left and Theirs on the right">
+                  <StackPanel Orientation="Horizontal" Spacing="6">
+                    <Path Width="12" Height="12" Data="{StaticResource Icons.Compare}"/>
+                    <TextBlock Text="Compare in Unreal"/>
+                  </StackPanel>
+                </Button>
+                <Button Classes="flat primary" Height="28" Padding="10,0" Click="OnMergeInUnreal" IsEnabled="{Binding CanMergeInUnreal}"
+                        ToolTip.Tip="Merge both branches; you only decide the conflicts">
+                  <StackPanel Orientation="Horizontal" Spacing="6">
+                    <Path Width="12" Height="12" Data="{StaticResource Icons.Merge}" Fill="White"/>
+                    <TextBlock Text="Merge in Unreal" Foreground="White"/>
+                  </StackPanel>
+                </Button>
+                <Button Classes="flat primary" Height="28" Padding="10,0" Click="OnResolveInUnreal"
+                        IsVisible="{Binding CanResolveInUnreal}" IsEnabled="{Binding CanMergeInUnreal}"
+                        ToolTip.Tip="Open the merge window in Unreal to decide the conflicts">
+                  <TextBlock Text="Resolve in Unreal" Foreground="White"/>
+                </Button>
+                <Button Classes="flat" Height="28" Padding="10,0" Click="OnOpenUnrealMergeTool"
+                        IsVisible="{Binding CanOpenUnrealMergeTool}" IsEnabled="{Binding CanMergeInUnreal}"
+                        ToolTip.Tip="Unreal's own merge window: keeps one side of the whole asset">
+                  <TextBlock Text="Unreal's merge window"/>
+                </Button>
+              </StackPanel>
+
+              <!-- Result of the last run -->
+              <Border Classes="status"
+                      Classes.error="{Binding IsUnrealStatusError}"
+                      IsVisible="{Binding UnrealStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                <Grid ColumnDefinitions="Auto,*">
+                  <Path Grid.Column="0" Width="14" Height="14" VerticalAlignment="Top" Margin="0,2,0,0"
+                        Data="{StaticResource Icons.Info}" Fill="{DynamicResource Brush.Accent}"
+                        IsVisible="{Binding !IsUnrealStatusError}"/>
+                  <Path Grid.Column="0" Width="14" Height="14" VerticalAlignment="Top" Margin="0,2,0,0"
+                        Data="{StaticResource Icons.Error}" Fill="#FFE5484D"
+                        IsVisible="{Binding IsUnrealStatusError}"/>
+                  <SelectableTextBlock Grid.Column="1" Margin="8,0,0,0" TextWrapping="Wrap" Text="{Binding UnrealStatus}"/>
+                </Grid>
+              </Border>
+
+              <ItemsControl ItemsSource="{Binding UnrealMergeChanges}"
+                            IsVisible="{Binding UnrealMergeChanges, Converter={x:Static ObjectConverters.IsNotNull}}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate DataType="m:BlueprintMergeChange">
+                    <Grid ColumnDefinitions="72,*" Margin="0,2">
+                      <Border Grid.Column="0"
+                              Classes="side_tag"
+                              Classes.ours="{Binding IsOurs}"
+                              Classes.theirs="{Binding IsTheirs}"
+                              Classes.conflict="{Binding IsConflict}">
+                        <TextBlock Text="{Binding Tag}"/>
+                      </Border>
+                      <TextBlock Grid.Column="1" Margin="8,0,0,0" FontSize="11" TextWrapping="Wrap" VerticalAlignment="Center" Text="{Binding Text}"/>
+                    </Grid>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </StackPanel>
+          </Border>
 
           <!-- Tools -->
           <UniformGrid Columns="2" ColumnSpacing="14">
