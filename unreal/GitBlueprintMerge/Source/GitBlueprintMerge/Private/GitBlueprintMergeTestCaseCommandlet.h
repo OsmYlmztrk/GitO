@@ -18,6 +18,9 @@
  *
  *   -run=GitBlueprintMergeTestCase -DataFixtures -OutDir=<dir>
  *       Writes DA_/DT_/MI_Fixture_Base/_Ours/_Theirs.uasset: a data asset, a data table and a material instance.
+ *   -run=GitBlueprintMergeTestCase -BlueprintFixture -OutDir=<dir>
+ *       Writes BP_Fixture_Base/_Ours/_Theirs.uasset: an actor Blueprint changed in its graphs, variables, class
+ *       defaults and components, with one conflict in each.
  *   -run=GitBlueprintMergeTestCase -Dump=<file>
  *       Logs every fact of an asset ("FACT key = value"), to check a merged result.
  */

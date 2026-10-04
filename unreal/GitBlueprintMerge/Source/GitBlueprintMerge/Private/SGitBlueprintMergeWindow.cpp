@@ -457,7 +457,7 @@ void SGitBlueprintMergeWindow::Construct(const FArguments& InArgs)
 					[
 						SNew(SButton)
 						.IsEnabled(bHasConflicts)
-						.ToolTipText(LOCTEXT("PrevTip", "Previous conflict (P)"))
+						.ToolTipText(LOCTEXT("PrevTip", "Previous conflict"))
 						.OnClicked_Lambda([this]() { SelectConflict(-1, false); return FReply::Handled(); })
 						[
 							SNew(SHorizontalBox)
@@ -478,7 +478,7 @@ void SGitBlueprintMergeWindow::Construct(const FArguments& InArgs)
 					[
 						SNew(SButton)
 						.IsEnabled(bHasConflicts)
-						.ToolTipText(LOCTEXT("NextTip", "Next conflict (N)"))
+						.ToolTipText(LOCTEXT("NextTip", "Next conflict"))
 						.OnClicked_Lambda([this]() { SelectConflict(1, false); return FReply::Handled(); })
 						[
 							SNew(SHorizontalBox)
@@ -495,12 +495,8 @@ void SGitBlueprintMergeWindow::Construct(const FArguments& InArgs)
 
 					+ SHorizontalBox::Slot()
 					.FillWidth(1.0f)
-					.VAlign(VAlign_Center)
-					.Padding(12.0f, 0.0f)
 					[
-						SNew(STextBlock)
-						.ColorAndOpacity(FSlateColor::UseSubduedForeground())
-						.Text(LOCTEXT("Keys", "Keys: O keep ours, T take theirs, A take both, N / P next / previous, B base, Ctrl+1-4 layout, Ctrl+Enter merge"))
+						SNullWidget::NullWidget
 					]
 
 					+ SHorizontalBox::Slot()
@@ -509,7 +505,7 @@ void SGitBlueprintMergeWindow::Construct(const FArguments& InArgs)
 					.Padding(0.0f, 0.0f, 16.0f, 0.0f)
 					[
 						SNew(SCheckBox)
-						.ToolTipText(LOCTEXT("BaseTip", "Also show the version both branches started from (B)"))
+						.ToolTipText(LOCTEXT("BaseTip", "Also show the version both branches started from"))
 						.IsChecked_Lambda([this]() { return bShowBase ? ECheckBoxState::Checked : ECheckBoxState::Unchecked; })
 						.OnCheckStateChanged_Lambda([this](ECheckBoxState State) { bShowBase = State == ECheckBoxState::Checked; })
 						[
@@ -581,7 +577,7 @@ void SGitBlueprintMergeWindow::Construct(const FArguments& InArgs)
 								return FText::Format(LOCTEXT("MergeBlockedTip", "Decide every conflict first ({0} left)."), NumGroups() - Choices.Num());
 							if (!CanMerge())
 								return LOCTEXT("MergeLeaveOutTip", "Some changes can't be merged yet (listed at the top): tick \"Leave out\" first.");
-							return LOCTEXT("MergeTip", "Merge, save and close (Ctrl+Enter)");
+							return LOCTEXT("MergeTip", "Merge, save and close");
 						})
 						.OnClicked(this, &SGitBlueprintMergeWindow::OnMerge)
 						[
@@ -833,10 +829,10 @@ TSharedRef<SWidget> SGitBlueprintMergeWindow::MakeLayoutSwitcher()
 		FText Tip;
 	};
 	const FLayoutInfo Layouts[NumLayouts] = {
-		{LOCTEXT("LayoutTop", "Top"), LOCTEXT("LayoutTopTip", "Changes on top, ours and theirs side by side, result at the bottom (Ctrl+1)")},
-		{LOCTEXT("LayoutSide", "Side"), LOCTEXT("LayoutSideTip", "Changes on the left; ours, result and theirs in columns (Ctrl+2)")},
-		{LOCTEXT("LayoutClassic", "Classic"), LOCTEXT("LayoutClassicTip", "Changes on the left; ours and theirs above a wide result (Ctrl+3)")},
-		{LOCTEXT("LayoutFocus", "Result"), LOCTEXT("LayoutFocusTip", "Changes on the left, a big result, ours and theirs stacked on the right (Ctrl+4)")},
+		{LOCTEXT("LayoutTop", "Top"), LOCTEXT("LayoutTopTip", "Changes on top, ours and theirs side by side, result at the bottom")},
+		{LOCTEXT("LayoutSide", "Side"), LOCTEXT("LayoutSideTip", "Changes on the left; ours, result and theirs in columns")},
+		{LOCTEXT("LayoutClassic", "Classic"), LOCTEXT("LayoutClassicTip", "Changes on the left; ours and theirs above a wide result")},
+		{LOCTEXT("LayoutFocus", "Result"), LOCTEXT("LayoutFocusTip", "Changes on the left, a big result, ours and theirs stacked on the right")},
 	};
 
 	TSharedRef<SHorizontalBox> Box = SNew(SHorizontalBox)
@@ -1119,9 +1115,9 @@ TSharedRef<SWidget> SGitBlueprintMergeWindow::MakeChoiceButton(int32 Group, ERes
 	const FText Label = Side == EResolution::Ours ? LOCTEXT("KeepOurs", "Keep ours")
 		: Side == EResolution::Theirs ? LOCTEXT("TakeTheirs", "Take theirs")
 		: LOCTEXT("TakeBoth", "Take both");
-	const FText Tip = Side == EResolution::Ours ? LOCTEXT("KeepOursTip", "Keep our version (O)")
-		: Side == EResolution::Theirs ? LOCTEXT("TakeTheirsTip", "Take their version (T)")
-		: LOCTEXT("TakeBothTip", "Keep both sides' nodes, one after the other (A)");
+	const FText Tip = Side == EResolution::Ours ? LOCTEXT("KeepOursTip", "Keep our version")
+		: Side == EResolution::Theirs ? LOCTEXT("TakeTheirsTip", "Take their version")
+		: LOCTEXT("TakeBothTip", "Keep both sides' nodes, one after the other");
 
 	// A real button: filled with the side's color once chosen, so the choice reads at a glance.
 	auto IsSelected = [this, Group, Side, bBoth]() { return bBoth ? IsBoth(Group) : IsChosen(Group, Side); };
@@ -1268,7 +1264,7 @@ TSharedRef<SWidget> SGitBlueprintMergeWindow::MakeGraphColumn(EResolution Side, 
 							const FRow* Row = GetSelectedRow();
 							return bResult && Row && Row->bCanTakeBoth ? EVisibility::Visible : EVisibility::Collapsed;
 						})
-						.ToolTipText(LOCTEXT("TakeBothTip", "Keep both sides' nodes, one after the other (A)"))
+						.ToolTipText(LOCTEXT("TakeBothTip", "Keep both sides' nodes, one after the other"))
 						.ButtonColorAndOpacity_Lambda([this]() { return FSlateColor(IsBoth(GetSelectedGroup()) ? DecidedColor : FLinearColor(0.55f, 0.55f, 0.55f)); })
 						.OnClicked_Lambda([this]()
 						{
@@ -1347,7 +1343,7 @@ TSharedRef<SWidget> SGitBlueprintMergeWindow::MakeGraphColumn(EResolution Side, 
 						SNew(SButton)
 						.Visibility(bChoosable ? EVisibility::Visible : EVisibility::Collapsed)
 						.IsEnabled_Lambda([this]() { return GetSelectedGroup() != INDEX_NONE; })
-						.ToolTipText(Side == EResolution::Ours ? LOCTEXT("KeepOursTip", "Keep our version (O)") : LOCTEXT("TakeTheirsTip", "Take their version (T)"))
+						.ToolTipText(Side == EResolution::Ours ? LOCTEXT("KeepOursTip", "Keep our version") : LOCTEXT("TakeTheirsTip", "Take their version"))
 						.Text(Side == EResolution::Ours ? LOCTEXT("UseOurs", "Keep ours") : LOCTEXT("UseTheirs", "Take theirs"))
 						.OnClicked_Lambda([this, Side]()
 						{
@@ -1883,62 +1879,6 @@ bool SGitBlueprintMergeWindow::ConfirmClose()
 
 	bConfirmingClose = true;
 	return false;
-}
-
-FReply SGitBlueprintMergeWindow::OnKeyDown(const FGeometry& MyGeometry, const FKeyEvent& InKeyEvent)
-{
-	const FKey Key = InKeyEvent.GetKey();
-	const bool bPlain = !InKeyEvent.IsControlDown() && !InKeyEvent.IsAltDown() && !InKeyEvent.IsCommandDown();
-
-	// Ctrl+1..4 switch the layout.
-	const FKey LayoutKeys[NumLayouts] = {EKeys::One, EKeys::Two, EKeys::Three, EKeys::Four};
-	for (int32 Index = 0; Index < NumLayouts; ++Index)
-	{
-		if (InKeyEvent.IsControlDown() && Key == LayoutKeys[Index])
-		{
-			SetLayout(Index);
-			return FReply::Handled();
-		}
-	}
-
-	if (bPlain && (Key == EKeys::O || Key == EKeys::One))
-	{
-		Choose(GetSelectedGroup(), EResolution::Ours);
-		return FReply::Handled();
-	}
-	if (bPlain && (Key == EKeys::T || Key == EKeys::Two))
-	{
-		Choose(GetSelectedGroup(), EResolution::Theirs);
-		return FReply::Handled();
-	}
-	if (bPlain && (Key == EKeys::A || Key == EKeys::Three))
-	{
-		const FRow* Row = GetSelectedRow();
-		if (Row && Row->bCanTakeBoth)
-			Choose(Row->Group, EResolution::Both);
-		return FReply::Handled();
-	}
-	if (bPlain && (Key == EKeys::N || Key == EKeys::F8))
-	{
-		SelectConflict(InKeyEvent.IsShiftDown() ? -1 : 1, false);
-		return FReply::Handled();
-	}
-	if (bPlain && Key == EKeys::P)
-	{
-		SelectConflict(-1, false);
-		return FReply::Handled();
-	}
-	if (bPlain && Key == EKeys::B)
-	{
-		bShowBase = !bShowBase;
-		return FReply::Handled();
-	}
-	if (Key == EKeys::Enter && InKeyEvent.IsControlDown())
-		return OnMerge();
-	if (Key == EKeys::Escape)
-		return OnCancel();
-
-	return SCompoundWidget::OnKeyDown(MyGeometry, InKeyEvent);
 }
 
 #undef LOCTEXT_NAMESPACE

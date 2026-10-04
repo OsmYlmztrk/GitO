@@ -2,13 +2,22 @@
 
 #include "GitBlueprintMergeTestCaseCommandlet.h"
 
+#include "Components/PointLightComponent.h"
+#include "Components/StaticMeshComponent.h"
 #include "DataTableEditorUtils.h"
 #include "EdGraph/EdGraph.h"
 #include "EdGraph/EdGraphNode.h"
 #include "EdGraph/EdGraphPin.h"
 #include "EdGraphSchema_K2.h"
 #include "Engine/Blueprint.h"
+#include "Engine/BlueprintGeneratedClass.h"
 #include "Engine/DataTable.h"
+#include "Engine/SCS_Node.h"
+#include "Engine/SimpleConstructionScript.h"
+#include "K2Node_CallFunction.h"
+#include "K2Node_Event.h"
+#include "K2Node_FunctionEntry.h"
+#include "Kismet/KismetSystemLibrary.h"
 #include "Materials/Material.h"
 #include "Materials/MaterialInstanceConstant.h"
 #include "Kismet2/BlueprintEditorUtils.h"
@@ -209,6 +218,189 @@ namespace
 		return 0;
 	}
 
+	/** Print String node in Graph at (X, Y) saying Text. */
+	UK2Node_CallFunction* AddPrint(UEdGraph* Graph, const TCHAR* Text, int32 X, int32 Y)
+	{
+		FGraphNodeCreator<UK2Node_CallFunction> Creator(*Graph);
+		UK2Node_CallFunction* Node = Creator.CreateNode();
+		Node->SetFromFunction(UKismetSystemLibrary::StaticClass()->FindFunctionByName(GET_FUNCTION_NAME_CHECKED(UKismetSystemLibrary, PrintString)));
+		Node->NodePosX = X;
+		Node->NodePosY = Y;
+		Creator.Finalize();
+		GetDefault<UEdGraphSchema_K2>()->TrySetDefaultValue(*Node->FindPin(TEXT("InString")), Text);
+		return Node;
+	}
+
+	void Connect(UEdGraphNode* From, const FName& FromPin, UEdGraphNode* To, const FName& ToPin)
+	{
+		if (!From || !To || !GetDefault<UEdGraphSchema_K2>()->TryCreateConnection(From->FindPin(FromPin), To->FindPin(ToPin)))
+			UE_LOG(LogGitBlueprintMergeTestCase, Error, TEXT("Could not connect %s -> %s."), *FromPin.ToString(), *ToPin.ToString());
+	}
+
+	UEdGraph* AddFunction(UBlueprint* Blueprint, const TCHAR* Name, const TCHAR* Text)
+	{
+		UEdGraph* Graph = FBlueprintEditorUtils::CreateNewGraph(Blueprint, FName(Name), UEdGraph::StaticClass(), UEdGraphSchema_K2::StaticClass());
+		FBlueprintEditorUtils::AddFunctionGraph<UClass>(Blueprint, Graph, /*bIsUserCreated=*/true, nullptr);
+		UEdGraphNode* Entry = nullptr;
+		for (UEdGraphNode* Node : Graph->Nodes)
+		{
+			if (Node && Node->IsA<UK2Node_FunctionEntry>())
+				Entry = Node;
+		}
+		Connect(Entry, UEdGraphSchema_K2::PN_Then, AddPrint(Graph, Text, 300, 0), UEdGraphSchema_K2::PN_Execute);
+		return Graph;
+	}
+
+	void AddVariable(UBlueprint* Blueprint, const TCHAR* Name, const FName& Category, const FName& SubCategory, const TCHAR* Default, const TCHAR* VarCategory = nullptr)
+	{
+		FEdGraphPinType Type;
+		Type.PinCategory = Category;
+		Type.PinSubCategory = SubCategory;
+		FBlueprintEditorUtils::AddMemberVariable(Blueprint, FName(Name), Type, Default);
+		if (VarCategory)
+			FBlueprintEditorUtils::SetBlueprintVariableCategory(Blueprint, FName(Name), nullptr, FText::FromString(VarCategory));
+	}
+
+	/** Class defaults live on the generated class' default object; set them after compiling. */
+	void SetDefault(UBlueprint* Blueprint, const TCHAR* Name, const TCHAR* Value)
+	{
+		UObject* Defaults = Blueprint->GeneratedClass->GetDefaultObject();
+		SetText(Defaults->GetClass(), Defaults, Defaults, Name, Value);
+	}
+
+	UObject* ComponentOf(UBlueprint* Blueprint, const TCHAR* Name)
+	{
+		USCS_Node* Node = Blueprint->SimpleConstructionScript->FindSCSNode(FName(Name));
+		return Node ? Node->ComponentTemplate.Get() : nullptr;
+	}
+
+	void Compile(UBlueprint* Blueprint)
+	{
+		FBlueprintEditorUtils::MarkBlueprintAsStructurallyModified(Blueprint);
+		FKismetEditorUtilities::CompileBlueprint(Blueprint, EBlueprintCompileOptions::SkipGarbageCollection);
+	}
+
+	/**
+	 * -BlueprintFixture: BP_Fixture_Base/_Ours/_Theirs, an actor Blueprint with changes on both sides in the event
+	 * graph, a function, member variables, class defaults and components, and one conflict in each of these:
+	 * the BeginPlay message, the Health class default, the light's intensity.
+	 */
+	int32 WriteBlueprintFixture(const FString& OutDir)
+	{
+		using namespace GitBlueprintMerge;
+
+		const FString PackageName = TEXT("/Game/GBMFixtures/BP_Fixture");
+		const FString BaseFile = FPaths::Combine(OutDir, TEXT("BP_Fixture_Base.uasset"));
+		const FName Real = UEdGraphSchema_K2::PC_Real;
+		const FName Double = UEdGraphSchema_K2::PC_Double;
+
+		{
+			UPackage* Package = CreatePackage(*PackageName);
+			UBlueprint* Blueprint = FKismetEditorUtilities::CreateBlueprint(AActor::StaticClass(), Package, TEXT("BP_Fixture"), BPTYPE_Normal,
+				UBlueprint::StaticClass(), UBlueprintGeneratedClass::StaticClass());
+
+			// Components: a mesh at the root and a light under it.
+			USimpleConstructionScript* SCS = Blueprint->SimpleConstructionScript;
+			USCS_Node* Mesh = SCS->CreateNode(UStaticMeshComponent::StaticClass(), TEXT("Mesh"));
+			SCS->AddNode(Mesh);
+			USCS_Node* Light = SCS->CreateNode(UPointLightComponent::StaticClass(), TEXT("Light"));
+			Mesh->AddChildNode(Light);
+			CastChecked<UPointLightComponent>(Light->ComponentTemplate)->Intensity = 3000.0f;
+
+			AddVariable(Blueprint, TEXT("Health"), Real, Double, TEXT("100.0"), TEXT("Stats"));
+			AddVariable(Blueprint, TEXT("Speed"), Real, Double, TEXT("300.0"), TEXT("Stats"));
+			AddVariable(Blueprint, TEXT("DisplayName"), UEdGraphSchema_K2::PC_String, NAME_None, TEXT("Door"));
+
+			// Event graph: only our own BeginPlay -> Print String.
+			UEdGraph* EventGraph = FBlueprintEditorUtils::FindEventGraph(Blueprint);
+			for (UEdGraphNode* Node : TArray<UEdGraphNode*>(EventGraph->Nodes))
+				FBlueprintEditorUtils::RemoveNode(Blueprint, Node, true);
+
+			FGraphNodeCreator<UK2Node_Event> EventCreator(*EventGraph);
+			UK2Node_Event* BeginPlay = EventCreator.CreateNode();
+			BeginPlay->EventReference.SetExternalMember(TEXT("ReceiveBeginPlay"), AActor::StaticClass());
+			BeginPlay->bOverrideFunction = true;
+			EventCreator.Finalize();
+			Connect(BeginPlay, UEdGraphSchema_K2::PN_Then, AddPrint(EventGraph, TEXT("Base: BeginPlay"), 300, 0), UEdGraphSchema_K2::PN_Execute);
+
+			AddFunction(Blueprint, TEXT("Describe"), TEXT("Base: describe"));
+
+			Compile(Blueprint);
+			SetDefault(Blueprint, TEXT("InitialLifeSpan"), TEXT("0.0"));
+			if (!SaveAsset(Blueprint, BaseFile))
+				return 2;
+			Package->Rename(*FString::Printf(TEXT("/Temp/GBM_FixtureBase_%s"), *FGuid::NewGuid().ToString()), nullptr, REN_DontCreateRedirectors | REN_NonTransactional);
+		}
+
+		for (const bool bOurs : {true, false})
+		{
+			const FString OutFile = FPaths::Combine(OutDir, bOurs ? TEXT("BP_Fixture_Ours.uasset") : TEXT("BP_Fixture_Theirs.uasset"));
+			FRevision Revision;
+			if (!LoadRevision(BaseFile, bOurs ? TEXT("Ours") : TEXT("Theirs"), Revision))
+				return 2;
+			RenameRevision(Revision, PackageName, OutFile);
+
+			UBlueprint* Blueprint = Revision.Blueprint;
+			const UEdGraphSchema_K2* Schema = GetDefault<UEdGraphSchema_K2>();
+			UEdGraphNode* Print = FindNode(Blueprint, TEXT("Print String"), TEXT("InString"), TEXT("Base: BeginPlay"));
+			UEdGraphNode* Describe = FindNode(Blueprint, TEXT("Print String"), TEXT("InString"), TEXT("Base: describe"));
+			UPointLightComponent* Light = Cast<UPointLightComponent>(ComponentOf(Blueprint, TEXT("Light")));
+			UStaticMeshComponent* Mesh = Cast<UStaticMeshComponent>(ComponentOf(Blueprint, TEXT("Mesh")));
+			if (!Print || !Describe || !Light || !Mesh)
+			{
+				ReleaseRevision(Revision);
+				return 2;
+			}
+
+			if (bOurs)
+			{
+				// Conflict: the BeginPlay message. Clean: a second message after it.
+				Schema->TrySetDefaultValue(*Print->FindPin(TEXT("InString")), TEXT("Ours: BeginPlay"));
+				Connect(Print, UEdGraphSchema_K2::PN_Then, AddPrint(Print->GetGraph(), TEXT("Ours: ready"), 600, 0), UEdGraphSchema_K2::PN_Execute);
+				// Clean: a new variable.
+				AddVariable(Blueprint, TEXT("Armor"), UEdGraphSchema_K2::PC_Int, NAME_None, TEXT("5"), TEXT("Stats"));
+				// Conflict: light intensity. Clean: light color.
+				Light->Intensity = 5000.0f;
+				Light->LightColor = FColor(255, 80, 80);
+			}
+			else
+			{
+				Schema->TrySetDefaultValue(*Print->FindPin(TEXT("InString")), TEXT("Theirs: BeginPlay"));
+				// Clean: the function's message, and a new function.
+				Schema->TrySetDefaultValue(*Describe->FindPin(TEXT("InString")), TEXT("Theirs: describe"));
+				AddFunction(Blueprint, TEXT("ResetStats"), TEXT("Theirs: reset"));
+				AddVariable(Blueprint, TEXT("Ammo"), UEdGraphSchema_K2::PC_Int, NAME_None, TEXT("30"), TEXT("Combat"));
+				Light->Intensity = 2000.0f;
+				// Clean: a setting of the mesh.
+				Mesh->CastShadow = false;
+			}
+
+			Compile(Blueprint);
+
+			// Class defaults. Conflict: Health. Clean: DisplayName (ours), Speed and InitialLifeSpan (theirs).
+			SetDefault(Blueprint, TEXT("Health"), bOurs ? TEXT("150.0") : TEXT("80.0"));
+			if (bOurs)
+			{
+				SetDefault(Blueprint, TEXT("DisplayName"), TEXT("Ours door"));
+			}
+			else
+			{
+				SetDefault(Blueprint, TEXT("Speed"), TEXT("450.0"));
+				SetDefault(Blueprint, TEXT("InitialLifeSpan"), TEXT("10.0"));
+			}
+
+			TArray<FString> Problems;
+			const bool bSaved = SaveRevision(Revision, OutFile, Problems);
+			Revision.Package->Rename(*FString::Printf(TEXT("/Temp/GBM_FixtureDone_%s"), *FGuid::NewGuid().ToString()), nullptr, REN_DontCreateRedirectors | REN_NonTransactional);
+			ReleaseRevision(Revision);
+			if (!bSaved)
+				return 2;
+		}
+
+		UE_LOG(LogGitBlueprintMergeTestCase, Display, TEXT("Wrote BP_Fixture_Base/_Ours/_Theirs"));
+		return 0;
+	}
+
 	/** -Dump=<file>: every fact of the asset, to check a merged result. */
 	int32 DumpAsset(const FString& File)
 	{
@@ -252,6 +444,8 @@ int32 UGitBlueprintMergeTestCaseCommandlet::Main(const FString& Params)
 		return DumpAsset(DumpFile);
 	if (FParse::Param(*Params, TEXT("DataFixtures")) && !OutDir.IsEmpty())
 		return WriteDataFixtures(OutDir);
+	if (FParse::Param(*Params, TEXT("BlueprintFixture")) && !OutDir.IsEmpty())
+		return WriteBlueprintFixture(OutDir);
 
 	if (BaseFile.IsEmpty() || OutDir.IsEmpty())
 	{

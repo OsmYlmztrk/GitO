@@ -88,8 +88,6 @@ private:
 		Window->SetOnWindowClosed(FOnWindowClosed::CreateRaw(this, &FGitBlueprintMergeModule::OnWindowClosed));
 		FSlateApplication::Get().AddWindow(Window.ToSharedRef());
 
-		// Keyboard shortcuts work right away.
-		FSlateApplication::Get().SetKeyboardFocus(MergeWidget, EFocusCause::SetDirectly);
 
 		UE_LOG(LogGitBlueprintMergeUI, Display, TEXT("Merge window opened for %s (%d conflict(s))."), *Session->GetAssetName(), Session->GetPlan().NumConflicts);
 	}

@@ -18,9 +18,6 @@ namespace GitBlueprintMerge
  * Lets a person decide each conflict group (keep ours / take theirs / take both) while looking at both
  * versions and a live preview of the merged result in the middle, then merges and saves. Changes that
  * merge on their own are listed for reference.
- *
- * Keys: O keep ours, T take theirs, A take both, N / P next / previous conflict, B show base, Ctrl+1..4 layout,
- * Ctrl+Enter merge, Esc cancel.
  */
 class SGitBlueprintMergeWindow : public SCompoundWidget
 {
@@ -44,8 +41,6 @@ public:
 	 */
 	bool ConfirmClose();
 
-	virtual bool SupportsKeyboardFocus() const override { return true; }
-	virtual FReply OnKeyDown(const FGeometry& MyGeometry, const FKeyEvent& InKeyEvent) override;
 
 private:
 	enum class ERowKind : uint8
