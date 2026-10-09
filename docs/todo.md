@@ -47,11 +47,11 @@ Decision: public GitHub repo, releases on GitHub Releases, installer + self-upda
 - [x] User creates the public GitHub repo (`OsmYlmztrk/GitO`) and pushes `mygitgui` (outward-facing, the user does it). Depends on "GitHub fork + origin remote" under Waiting.
 - [x] `VelopackApp.Build().Run()` at the top of `App.Main` (Velopack 1.2.161). Checked under NativeAOT: the install hook runs and exits.
 - [x] `Check4Update` uses `Models/AppUpdater.cs` (Velopack `UpdateManager` + `GithubSource`). Startup banner and "ignore this version" kept; the dialog has "Update and Restart" (download with progress, apply, restart) and "Release Page". The automatic check is silent in copies not installed by the setup (dev builds).
-- [x] Versions are now three-part: `VERSION` = `1.0.0`, tags `vX.Y.Z`; About and the update dialog show `vX.Y.Z`.
+- [x] Versions are now three-part: `VERSION` = `0.0.1` (first release; user wants to start low, 2026-10-10), tags `vX.Y.Z`; About and the update dialog show `vX.Y.Z`.
 - [x] Point the About window and `.csproj` URLs at our repo instead of sourcegit-scm (`https://github.com/OsmYlmztrk/GitO`).
 - [x] `.github/workflows/release.yml`: on a `vX.Y.Z` tag, AOT publish, drop `SourceGit.exe`/pdb, check `GitO.exe` and the plugin are there, `vpk download` (previous release, for deltas), `vpk pack` (`GitO-win-Setup.exe`, full/delta nupkg, portable zip), `vpk upload github --publish`. Release notes = commit subjects since the previous tag.
 - [x] Bundle the prebuilt Unreal plugin with the installer (see NEXT UP).
-- [ ] **User test of self-update:** install v1.0.0 with the setup, publish v1.0.1 (tag), start GitO → banner → "Update and Restart" → GitO restarts on v1.0.1 (About shows it).
+- [ ] **User test of self-update:** install v0.0.1 with the setup, publish v0.0.2 (tag), start GitO → banner → "Update and Restart" → GitO restarts on v0.0.2 (About shows it).
 - Known limit: the exe is unsigned, so Windows SmartScreen warns on first run. No fully free fix (Azure Trusted Signing is about $10/month; SignPath's free plan is for open-source projects only, could apply once public).
 
 ### License compliance and attribution (checked 2026-10-10)

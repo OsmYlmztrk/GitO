@@ -21,7 +21,7 @@ namespace SourceGit.Models
         [JsonIgnore]
         public System.Version CurrentVersion { get; }
 
-        // MyGitGUI: GitO uses three-part versions (1.0.0)
+        // MyGitGUI: GitO uses three-part versions (0.0.1)
         [JsonIgnore]
         public string CurrentVersionStr => $"v{CurrentVersion.Major}.{CurrentVersion.Minor}.{Math.Max(CurrentVersion.Build, 0)}";
 
