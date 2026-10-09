@@ -22,6 +22,7 @@ public class GitBlueprintMerge : ModuleRules
 			"MainFrame",
 			"GraphEditor",
 			"PropertyEditor",
+			"UMG",
 		});
 	}
 }

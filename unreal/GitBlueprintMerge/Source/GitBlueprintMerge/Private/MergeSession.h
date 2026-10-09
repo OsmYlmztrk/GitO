@@ -72,6 +72,21 @@ namespace GitBlueprintMerge
 		 */
 		bool Merge(const TMap<int32, EResolution>& Choices, const FString& OutputFile, const FString& PackageName, bool bLeaveOutUnsupported = false);
 
+		/**
+		 * The person edited the preview by hand: compiles it (Blueprints) and takes its snapshot again, so the
+		 * preview problems and values match what is on screen. False when it doesn't compile.
+		 */
+		bool CheckEditedPreview();
+
+		/** Snapshot of the preview again, without compiling (cheap enough to do after every edit). */
+		void RefreshPreviewSnapshot();
+
+		/**
+		 * Like Merge, but saves the preview as the person edited it by hand instead of building the result again.
+		 * Choices and bLeaveOutUnsupported must match the preview; they also fill the report.
+		 */
+		bool MergeEdited(const TMap<int32, EResolution>& Choices, const FString& OutputFile, const FString& PackageName, bool bLeaveOutUnsupported = false);
+
 		bool WasWritten() const { return bWritten; }
 		const TArray<FString>& GetProblems() const { return Problems; }
 
@@ -97,6 +112,7 @@ namespace GitBlueprintMerge
 		TArray<FString> Problems;
 		TArray<FString> LeftOut;
 		bool bWritten = false;
+		bool bEditedByHand = false;
 
 		FRevision Preview;
 		TArray<FRevision> OldPreviews;
@@ -111,6 +127,12 @@ namespace GitBlueprintMerge
 		 * bUndecidedAsOurs, otherwise they make it fail. OutMoveAside: nodes to place below the others.
 		 */
 		bool Resolve(FMergePlan& OutPlan, const TMap<int32, EResolution>& Choices, bool bUndecidedAsOurs, TArray<FString>& OutMoveAside) const;
+
+		/** Resets the last merge's outcome and fills MergedPlan / LeftOut for these choices; false (with Problems) when it can't merge. */
+		bool PlanMergeFor(const TMap<int32, EResolution>& Choices, bool bLeaveOutUnsupported, TArray<FString>& OutMoveAside);
+
+		/** Every revision that may hold the real package name from an earlier attempt. */
+		TArray<FRevision> EarlierResults() const;
 
 		/** Applies the plan's changes from theirs onto Result (a fresh copy of ours). */
 		bool Apply(const FMergePlan& InPlan, FRevision& Result, const TArray<FString>& MoveAsideIds, TArray<FString>& OutProblems) const;

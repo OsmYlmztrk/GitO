@@ -149,7 +149,7 @@ namespace SourceGit.ViewModels
 
             _read = new UnrealMergeStep("Get Base, Ours and Theirs from Git");
             _analyze = new UnrealMergeStep("Combine both sides (Unreal, in the background)");
-            _decide = new UnrealMergeStep(mode == Mode.UnrealWindow ? "Merge in Unreal's merge window" : "Decide the conflicts in Unreal");
+            _decide = new UnrealMergeStep(mode == Mode.UnrealWindow ? "Merge in Unreal's merge window" : "Review and decide in Unreal");
             _save = new UnrealMergeStep("Save and stage the result");
 
             Steps.Add(_read);
@@ -269,12 +269,7 @@ namespace SourceGit.ViewModels
                     analysis += $", {report.Unsupported.Count} can't be merged automatically";
                 End(_analyze, UnrealMergeStepState.Done, analysis);
 
-                if (report.Written)
-                {
-                    End(_decide, UnrealMergeStepState.Skipped, "No conflicts");
-                    return await StageAsync(files, report);
-                }
-
+                // MyGitGUI: even a clean merge opens the window, so the person sees what was combined before it is staged.
                 // Changes the plugin can't merge yet: the merge window lists them and lets the person leave them out.
                 if (report.Problems.Count > 0 && report.Unsupported.Count == 0)
                 {
@@ -285,7 +280,7 @@ namespace SourceGit.ViewModels
 
             // 3. Our merge window in Unreal.
             Begin(_decide, $"Switch to Unreal: the \"Merge {name}\" window shows both versions side by side. " +
-                "Pick Keep ours or Take theirs for each conflict, then press Merge. Closing the window cancels without changes.");
+                "Check what was combined, pick Keep ours or Take theirs for each conflict, then press Merge. Closing the window cancels without changes.");
             var decided = await RunPluginAsync(files, true);
             if (_terminated)
                 return Cancelled();
@@ -420,6 +415,8 @@ namespace SourceGit.ViewModels
             if (summary.Resolved > 0)
                 message.Append($"\n- You decided {summary.Resolved} conflict(s).");
             message.Append($"\n- {automatic} change(s) combined automatically ({summary.Ours} from {OursLabel}, {summary.Theirs} from {TheirsLabel}, {summary.Both} on both).");
+            if (report.EditedByHand)
+                message.Append("\n- You edited the result by hand and confirmed your edits.");
             if (report.LeftOut.Count > 0)
             {
                 message.Append($"\n- Left out {report.LeftOut.Count} change(s) from {TheirsLabel}; redo them by hand in Unreal before you commit:");

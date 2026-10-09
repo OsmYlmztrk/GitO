@@ -284,14 +284,23 @@ namespace GitBlueprintMerge
 		return SummarizeGroup(Plan, Group, BaseSnap, OursSnap, TheirsSnap);
 	}
 
-	bool FMergeSession::Merge(const TMap<int32, EResolution>& Choices, const FString& OutputFile, const FString& PackageName, bool bLeaveOutUnsupported)
+	TArray<FRevision> FMergeSession::EarlierResults() const
+	{
+		TArray<FRevision> All = Results;
+		All.Append(OldPreviews);
+		if (Preview.Package)
+			All.Add(Preview);
+		return All;
+	}
+
+	bool FMergeSession::PlanMergeFor(const TMap<int32, EResolution>& Choices, bool bLeaveOutUnsupported, TArray<FString>& OutMoveAside)
 	{
 		Problems.Reset();
 		LeftOut.Reset();
 		bWritten = false;
+		bEditedByHand = false;
 
-		TArray<FString> MoveAsideIds;
-		if (!Resolve(MergedPlan, Choices, /*bUndecidedAsOurs=*/false, MoveAsideIds))
+		if (!Resolve(MergedPlan, Choices, /*bUndecidedAsOurs=*/false, OutMoveAside))
 		{
 			Problems.Add(TEXT("Every conflict needs a choice (ours, theirs or both)."));
 			return false;
@@ -318,6 +327,14 @@ namespace GitBlueprintMerge
 			for (const FString& Text : LeftOut)
 				UE_LOG(LogGitBlueprintMerge, Display, TEXT("Left out (redo by hand): %s"), *Text);
 		}
+		return true;
+	}
+
+	bool FMergeSession::Merge(const TMap<int32, EResolution>& Choices, const FString& OutputFile, const FString& PackageName, bool bLeaveOutUnsupported)
+	{
+		TArray<FString> MoveAsideIds;
+		if (!PlanMergeFor(Choices, bLeaveOutUnsupported, MoveAsideIds))
+			return false;
 
 		// Work on a fresh copy of ours so a failed attempt can be retried with other choices.
 		FRevision Result;
@@ -328,7 +345,7 @@ namespace GitBlueprintMerge
 			return false;
 		}
 
-		RenameRevision(Result, PackageName, OutputFile, Results);
+		RenameRevision(Result, PackageName, OutputFile, EarlierResults());
 		Results.Add(Result);
 		if (Apply(MergedPlan, Result, MoveAsideIds, Problems))
 			bWritten = SaveRevision(Result, OutputFile, Problems);
@@ -337,6 +354,47 @@ namespace GitBlueprintMerge
 			UE_LOG(LogGitBlueprintMerge, Warning, TEXT("Not merged: %s"), *Problem);
 		if (bWritten)
 			UE_LOG(LogGitBlueprintMerge, Display, TEXT("Merged result saved to '%s'."), *OutputFile);
+
+		return bWritten;
+	}
+
+	bool FMergeSession::CheckEditedPreview()
+	{
+		PreviewProblems.Reset();
+		if (!Preview.Asset)
+			PreviewProblems.Add(TEXT("There is no result to check."));
+		else if (Preview.Blueprint)
+			CompileMerged(Preview.Blueprint, PreviewProblems);
+
+		RefreshPreviewSnapshot();
+		return PreviewProblems.IsEmpty();
+	}
+
+	void FMergeSession::RefreshPreviewSnapshot()
+	{
+		PreviewSnap = Preview.Asset ? TakeAssetSnapshot(Preview.Asset) : FSnapshot();
+	}
+
+	bool FMergeSession::MergeEdited(const TMap<int32, EResolution>& Choices, const FString& OutputFile, const FString& PackageName, bool bLeaveOutUnsupported)
+	{
+		TArray<FString> Unused;
+		if (!PlanMergeFor(Choices, bLeaveOutUnsupported, Unused))
+			return false;
+		if (!Preview.Package || !Preview.Asset)
+		{
+			Problems.Add(TEXT("There is no edited result to save."));
+			return false;
+		}
+
+		bEditedByHand = true;
+		RenameRevision(Preview, PackageName, OutputFile, EarlierResults());
+		if (!Preview.Blueprint || CompileMerged(Preview.Blueprint, Problems))
+			bWritten = SaveRevision(Preview, OutputFile, Problems);
+
+		for (const FString& Problem : Problems)
+			UE_LOG(LogGitBlueprintMerge, Warning, TEXT("Not merged: %s"), *Problem);
+		if (bWritten)
+			UE_LOG(LogGitBlueprintMerge, Display, TEXT("Merged result, edited by hand, saved to '%s'."), *OutputFile);
 
 		return bWritten;
 	}
@@ -431,6 +489,7 @@ namespace GitBlueprintMerge
 		Root->SetStringField(TEXT("kind"), AssetKindName(Kind));
 		Root->SetBoolField(TEXT("canAutoMerge"), Plan.NumConflicts == 0 && Unsupported.IsEmpty());
 		Root->SetBoolField(TEXT("written"), bWritten);
+		Root->SetBoolField(TEXT("editedByHand"), bWritten && bEditedByHand);
 		Root->SetObjectField(TEXT("summary"), Summary);
 		Root->SetArrayField(TEXT("conflicts"), Conflicts);
 		Root->SetArrayField(TEXT("changes"), Changes);

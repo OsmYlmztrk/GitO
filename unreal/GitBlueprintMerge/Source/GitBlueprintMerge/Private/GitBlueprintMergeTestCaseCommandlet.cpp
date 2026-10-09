@@ -2,8 +2,13 @@
 
 #include "GitBlueprintMergeTestCaseCommandlet.h"
 
+#include "Blueprint/WidgetTree.h"
+#include "Components/Button.h"
+#include "Components/CanvasPanel.h"
 #include "Components/PointLightComponent.h"
 #include "Components/StaticMeshComponent.h"
+#include "Components/TextBlock.h"
+#include "Factories/Factory.h"
 #include "DataTableEditorUtils.h"
 #include "EdGraph/EdGraph.h"
 #include "EdGraph/EdGraphNode.h"
@@ -22,6 +27,7 @@
 #include "Materials/MaterialInstanceConstant.h"
 #include "Kismet2/BlueprintEditorUtils.h"
 #include "Kismet2/KismetEditorUtilities.h"
+#include "BlueprintMergeApply.h"
 #include "MergeSession.h"
 #include "Misc/Paths.h"
 #include "UObject/Package.h"
@@ -401,6 +407,209 @@ namespace
 		return 0;
 	}
 
+	/** A Blueprint made by an editor factory found by class path (some factories aren't exported). */
+	UBlueprint* CreateWithFactory(const TCHAR* FactoryClass, const TCHAR* AssetClass, const TCHAR* Name, TFunctionRef<void(UObject*)> Setup)
+	{
+		UClass* Class = FindObject<UClass>(nullptr, FactoryClass);
+		UClass* Asset = FindObject<UClass>(nullptr, AssetClass);
+		if (!Class || !Asset)
+		{
+			UE_LOG(LogGitBlueprintMergeTestCase, Error, TEXT("%s or %s not found."), FactoryClass, AssetClass);
+			return nullptr;
+		}
+
+		UFactory* Factory = NewObject<UFactory>(GetTransientPackage(), Class);
+		Setup(Factory);
+		UPackage* Package = CreatePackage(*(FString(TEXT("/Game/GBMFixtures/")) + Name));
+		return Cast<UBlueprint>(Factory->FactoryCreateNew(Asset, Package, FName(Name), RF_Public | RF_Standalone | RF_Transactional, nullptr, GWarn));
+	}
+
+	/**
+	 * Writes <Name>_Base/_Ours/_Theirs: MakeBase builds the base Blueprint in its package, Edit changes a loaded copy
+	 * for each side (it is compiled afterwards).
+	 */
+	int32 WriteBlueprintSides(const FString& OutDir, const TCHAR* Name, TFunctionRef<UBlueprint*()> MakeBase, TFunctionRef<bool(UBlueprint*, bool)> Edit)
+	{
+		using namespace GitBlueprintMerge;
+
+		const FString PackageName = FString(TEXT("/Game/GBMFixtures/")) + Name;
+		const FString BaseFile = FPaths::Combine(OutDir, FString(Name) + TEXT("_Base.uasset"));
+		{
+			UBlueprint* Blueprint = MakeBase();
+			if (!Blueprint)
+				return 2;
+			Compile(Blueprint);
+			if (!SaveAsset(Blueprint, BaseFile))
+				return 2;
+			Blueprint->GetPackage()->Rename(*FString::Printf(TEXT("/Temp/GBM_FixtureBase_%s"), *FGuid::NewGuid().ToString()), nullptr, REN_DontCreateRedirectors | REN_NonTransactional);
+		}
+
+		for (const bool bOurs : {true, false})
+		{
+			const FString OutFile = FPaths::Combine(OutDir, FString(Name) + (bOurs ? TEXT("_Ours.uasset") : TEXT("_Theirs.uasset")));
+			FRevision Revision;
+			if (!LoadRevision(BaseFile, bOurs ? TEXT("Ours") : TEXT("Theirs"), Revision))
+				return 2;
+			RenameRevision(Revision, PackageName, OutFile);
+
+			const bool bEdited = Edit(Revision.Blueprint, bOurs);
+			if (bEdited)
+				Compile(Revision.Blueprint);
+
+			TArray<FString> Problems;
+			const bool bSaved = bEdited && SaveRevision(Revision, OutFile, Problems);
+			Revision.Package->Rename(*FString::Printf(TEXT("/Temp/GBM_FixtureDone_%s"), *FGuid::NewGuid().ToString()), nullptr, REN_DontCreateRedirectors | REN_NonTransactional);
+			ReleaseRevision(Revision);
+			if (!bSaved)
+				return 2;
+		}
+
+		UE_LOG(LogGitBlueprintMergeTestCase, Display, TEXT("Wrote %s_Base/_Ours/_Theirs"), Name);
+		return 0;
+	}
+
+	UWidgetTree* WidgetTreeOf(UBlueprint* Blueprint)
+	{
+		const FObjectProperty* Property = FindFProperty<FObjectProperty>(Blueprint->GetClass(), TEXT("WidgetTree"));
+		return Property ? Cast<UWidgetTree>(Property->GetObjectPropertyValue_InContainer(Blueprint)) : nullptr;
+	}
+
+	/** A widget made in Blueprint's tree, registered the way the designer does it. */
+	template <typename T>
+	T* AddWidget(UBlueprint* Blueprint, const TCHAR* Name)
+	{
+		T* Widget = WidgetTreeOf(Blueprint)->ConstructWidget<T>(T::StaticClass(), Name);
+		if (const FMapProperty* Guids = FindFProperty<FMapProperty>(Blueprint->GetClass(), TEXT("WidgetVariableNameToGuidMap")))
+		{
+			FScriptMapHelper Map(Guids, Guids->ContainerPtrToValuePtr<void>(Blueprint));
+			const FName Key(Name);
+			const FGuid Guid = FGuid::NewGuid();
+			Map.AddPair(&Key, &Guid);
+		}
+		return Widget;
+	}
+
+	/**
+	 * -WidgetFixture: WBP_Fixture_Base/_Ours/_Theirs. Ours adds a variable; theirs changes a Class Setting (merged)
+	 * and the widget tree: the title's text and a new button (listed as unsupported, not merged).
+	 */
+	int32 WriteWidgetFixture(const FString& OutDir)
+	{
+		auto MakeBase = []() -> UBlueprint*
+		{
+			UBlueprint* Blueprint = CreateWithFactory(TEXT("/Script/UMGEditor.WidgetBlueprintFactory"), TEXT("/Script/UMGEditor.WidgetBlueprint"), TEXT("WBP_Fixture"),
+				[](UObject* Factory) { SetText(Factory, TEXT("ParentClass"), TEXT("/Script/UMG.UserWidget")); });
+			UWidgetTree* Tree = Blueprint ? WidgetTreeOf(Blueprint) : nullptr;
+			if (!Tree)
+				return nullptr;
+
+			UCanvasPanel* Root = AddWidget<UCanvasPanel>(Blueprint, TEXT("Root"));
+			Tree->RootWidget = Root;
+			UTextBlock* Title = AddWidget<UTextBlock>(Blueprint, TEXT("Title"));
+			Title->SetText(FText::FromString(TEXT("Base title")));
+			Root->AddChild(Title);
+			return Blueprint;
+		};
+
+		auto Edit = [](UBlueprint* Blueprint, bool bOurs)
+		{
+			UWidgetTree* Tree = WidgetTreeOf(Blueprint);
+			UCanvasPanel* Root = Tree ? Cast<UCanvasPanel>(Tree->RootWidget) : nullptr;
+			UTextBlock* Title = Tree ? Cast<UTextBlock>(Tree->FindWidget(TEXT("Title"))) : nullptr;
+			if (!Root || !Title)
+			{
+				UE_LOG(LogGitBlueprintMergeTestCase, Error, TEXT("Widget tree of WBP_Fixture not found."));
+				return false;
+			}
+
+			if (bOurs)
+			{
+				AddVariable(Blueprint, TEXT("Score"), UEdGraphSchema_K2::PC_Int, NAME_None, TEXT("0"));
+			}
+			else
+			{
+				Blueprint->BlueprintDescription = TEXT("Theirs description");
+				Title->SetText(FText::FromString(TEXT("Theirs title")));
+				Root->AddChild(AddWidget<UButton>(Blueprint, TEXT("PlayButton")));
+			}
+			return true;
+		};
+
+		return WriteBlueprintSides(OutDir, TEXT("WBP_Fixture"), MakeBase, Edit);
+	}
+
+	/**
+	 * -AnimFixture: ABP_Fixture_Base/_Ours/_Theirs, a template Anim Blueprint with a Slot node in its AnimGraph.
+	 * Ours adds a variable; theirs changes a setting of the Slot node and a Class Setting. Everything merges.
+	 */
+	int32 WriteAnimFixture(const FString& OutDir)
+	{
+		auto FindSlot = [](const UBlueprint* Blueprint) -> UEdGraphNode*
+		{
+			for (const UEdGraph* Graph : Blueprint->FunctionGraphs)
+			{
+				for (UEdGraphNode* Node : Graph ? Graph->Nodes : TArray<TObjectPtr<UEdGraphNode>>())
+				{
+					if (Node && Node->GetClass()->GetName() == TEXT("AnimGraphNode_Slot"))
+						return Node;
+				}
+			}
+			UE_LOG(LogGitBlueprintMergeTestCase, Error, TEXT("Slot node of ABP_Fixture not found."));
+			return nullptr;
+		};
+
+		auto MakeBase = []() -> UBlueprint*
+		{
+			UBlueprint* Blueprint = CreateWithFactory(TEXT("/Script/UnrealEd.AnimBlueprintFactory"), TEXT("/Script/Engine.AnimBlueprint"), TEXT("ABP_Fixture"),
+				[](UObject* Factory)
+				{
+					SetText(Factory, TEXT("ParentClass"), TEXT("/Script/Engine.AnimInstance"));
+					SetText(Factory, TEXT("bTemplate"), TEXT("True"));
+				});
+			UClass* SlotClass = FindObject<UClass>(nullptr, TEXT("/Script/AnimGraph.AnimGraphNode_Slot"));
+			UEdGraph* AnimGraph = nullptr;
+			for (UEdGraph* Graph : Blueprint ? Blueprint->FunctionGraphs : TArray<TObjectPtr<UEdGraph>>())
+			{
+				if (Graph && Graph->GetFName() == TEXT("AnimGraph"))
+					AnimGraph = Graph;
+			}
+			if (!SlotClass || !AnimGraph)
+			{
+				UE_LOG(LogGitBlueprintMergeTestCase, Error, TEXT("Could not set up ABP_Fixture."));
+				return nullptr;
+			}
+
+			UEdGraphNode* Slot = NewObject<UEdGraphNode>(AnimGraph, SlotClass, NAME_None, RF_Transactional);
+			AnimGraph->AddNode(Slot, /*bFromUI=*/false, /*bSelectNewNode=*/false);
+			Slot->CreateNewGuid();
+			Slot->PostPlacedNewNode();
+			Slot->AllocateDefaultPins();
+			Slot->NodePosX = -300;
+			return Blueprint;
+		};
+
+		auto Edit = [&FindSlot](UBlueprint* Blueprint, bool bOurs)
+		{
+			UEdGraphNode* Slot = FindSlot(Blueprint);
+			const FStructProperty* NodeProperty = Slot ? FindFProperty<FStructProperty>(Slot->GetClass(), TEXT("Node")) : nullptr;
+			if (!NodeProperty)
+				return false;
+
+			if (bOurs)
+			{
+				AddVariable(Blueprint, TEXT("Speed"), UEdGraphSchema_K2::PC_Real, UEdGraphSchema_K2::PC_Double, TEXT("0.0"));
+			}
+			else
+			{
+				SetText(NodeProperty->Struct, NodeProperty->ContainerPtrToValuePtr<void>(Slot), Slot, TEXT("bAlwaysUpdateSourcePose"), TEXT("True"));
+				SetText(Blueprint, TEXT("bUseMultiThreadedAnimationUpdate"), TEXT("False"));
+			}
+			return true;
+		};
+
+		return WriteBlueprintSides(OutDir, TEXT("ABP_Fixture"), MakeBase, Edit);
+	}
+
 	/** -Dump=<file>: every fact of the asset, to check a merged result. */
 	int32 DumpAsset(const FString& File)
 	{
@@ -418,6 +627,47 @@ namespace
 			UE_LOG(LogGitBlueprintMergeTestCase, Display, TEXT("FACT %s = %s"), *Key, *Snap.Facts[Key]);
 		ReleaseRevision(Revision);
 		return 0;
+	}
+
+	/** -CopyCheck -Ours=<bp> -Theirs=<bp>: copies every Print String of theirs into ours (as "Copy selected to result" does) and logs what landed. */
+	int32 CopyCheck(const FString& OursFile, const FString& TheirsFile)
+	{
+		using namespace GitBlueprintMerge;
+
+		FRevision Ours, Theirs;
+		if (!LoadRevision(OursFile, TEXT("Ours"), Ours) || !LoadRevision(TheirsFile, TEXT("Theirs"), Theirs) || !Ours.Blueprint || !Theirs.Blueprint)
+			return 2;
+
+		auto Count = [](UBlueprint* Blueprint)
+		{
+			TArray<UEdGraph*> Graphs;
+			Blueprint->GetAllGraphs(Graphs);
+			int32 Num = 0;
+			for (const UEdGraph* Graph : Graphs)
+				Num += Graph ? Graph->Nodes.Num() : 0;
+			return Num;
+		};
+
+		TArray<UEdGraphNode*> Nodes;
+		TArray<UEdGraph*> Graphs;
+		Theirs.Blueprint->GetAllGraphs(Graphs);
+		for (const UEdGraph* Graph : Graphs)
+			for (UEdGraphNode* Node : Graph->Nodes)
+				if (Cast<UK2Node_CallFunction>(Node))
+					Nodes.Add(Node);
+
+		const int32 Before = Count(Ours.Blueprint);
+		FString Problem;
+		const FVector2D DropAt(1000.0, 500.0);
+		const TArray<UEdGraphNode*> Copies = CopyNodes(Nodes, Theirs.Blueprint, Ours.Blueprint, Problem, &DropAt);
+		UE_LOG(LogGitBlueprintMergeTestCase, Display, TEXT("COPY selected %d, copied %d, nodes %d -> %d, problem '%s'"), Nodes.Num(), Copies.Num(), Before, Count(Ours.Blueprint), *Problem);
+		for (const UEdGraphNode* Copy : Copies)
+			UE_LOG(LogGitBlueprintMergeTestCase, Display, TEXT("COPY  %s in %s at %d,%d, in graph list: %s"), *Copy->GetNodeTitle(ENodeTitleType::ListView).ToString(),
+				*Copy->GetGraph()->GetName(), Copy->NodePosX, Copy->NodePosY, Copy->GetGraph()->Nodes.Contains(Copy) ? TEXT("yes") : TEXT("no"));
+
+		ReleaseRevision(Ours);
+		ReleaseRevision(Theirs);
+		return Copies.Num() > 0 ? 0 : 1;
 	}
 }
 
@@ -442,10 +692,21 @@ int32 UGitBlueprintMergeTestCaseCommandlet::Main(const FString& Params)
 
 	if (FParse::Value(*Params, TEXT("Dump="), DumpFile))
 		return DumpAsset(DumpFile);
+	if (FParse::Param(*Params, TEXT("CopyCheck")))
+	{
+		FString OursFile, TheirsFile;
+		FParse::Value(*Params, TEXT("Ours="), OursFile);
+		FParse::Value(*Params, TEXT("Theirs="), TheirsFile);
+		return CopyCheck(OursFile, TheirsFile);
+	}
 	if (FParse::Param(*Params, TEXT("DataFixtures")) && !OutDir.IsEmpty())
 		return WriteDataFixtures(OutDir);
 	if (FParse::Param(*Params, TEXT("BlueprintFixture")) && !OutDir.IsEmpty())
 		return WriteBlueprintFixture(OutDir);
+	if (FParse::Param(*Params, TEXT("WidgetFixture")) && !OutDir.IsEmpty())
+		return WriteWidgetFixture(OutDir);
+	if (FParse::Param(*Params, TEXT("AnimFixture")) && !OutDir.IsEmpty())
+		return WriteAnimFixture(OutDir);
 
 	if (BaseFile.IsEmpty() || OutDir.IsEmpty())
 	{

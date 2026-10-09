@@ -20,11 +20,16 @@ namespace GitBlueprintMerge
 	 *   graph/<graph>                   graph name | function|macro|event|delegate|sub
 	 *   node/<node>                     node class | owning graph   (existence)
 	 *   node/<node>/title|pos|comment|enabled
+ *   node/<node>/prop/<property>[.<field>]   node setting from the details panel (e.g. Anim Graph nodes)
 	 *   pin/<node>:<in|out>:<pin>       pin default value
 	 *   link/<node>:out:<pin>><node>:in:<pin>
 	 *   var/<var>, var/<var>/default    member variable
 	 *   component/<var>, component/<var>/prop/<name>
 	 *   cdo/<property>                  class default
+ *   bp/<property>                   Class Settings; Widget/Anim Blueprint data is unmergeable
+ *   inner/<path>, inner/<path>/<property>   other objects the Blueprint owns (widget tree, widget
+ *                                   animations, ...). Widget settings (inner/<widget>/<prop>, slot settings as
+ *                                   inner/<widget>/Slot.<prop>) and widgets theirs added merge; the rest is listed
 	 */
 	struct FSnapshot
 	{
@@ -41,6 +46,9 @@ namespace GitBlueprintMerge
 
 		/** Readable names for nodes, graphs, variables and components, keyed by guid; for data assets, by fact key. */
 		TMap<FString, FString> Labels;
+
+		/** Widgets of a Widget Blueprint: "inner/<widget>" -> "inner/<panel it sits in>", empty for the root. */
+		TMap<FString, FString> WidgetParents;
 
 		/** Facts that are compared but can't be taken from theirs yet (see AssetMerge.h). */
 		TSet<FString> Unmergeable;

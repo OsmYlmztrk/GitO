@@ -19,5 +19,5 @@ A personal, Windows-only Git GUI that looks like Fork, built on a fork of Source
 - **Licensing:**
   - Don't copy Fork's branding or icons; reuse layout only.
   - Never copy Unreal Engine source into the repo (EULA); only call engine APIs.
-- **Unreal merge window:** buttons only; keyboard shortcuts were removed on purpose.
+- **Unreal merge window:** buttons only, except graph editing (user request, 2026-10-10): Ctrl+C in any graph; Ctrl+V, Delete, Ctrl+Z, Ctrl+Y in the Result graph. Don't add other shortcuts.
 - **Commits:** only when asked. `.mcp.json` (local Unreal MCP config) stays uncommitted.

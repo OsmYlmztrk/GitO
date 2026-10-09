@@ -2,15 +2,31 @@
 
 #include "SGitBlueprintMergeWindow.h"
 
+#include "BlueprintMergeApply.h"
 #include "Brushes/SlateRoundedBoxBrush.h"
+#include "Components/PanelSlot.h"
+#include "Components/Widget.h"
 #include "EdGraph/EdGraph.h"
 #include "EdGraph/EdGraphNode.h"
+#include "Editor.h"
+#include "Editor/TransBuffer.h"
 #include "Engine/Blueprint.h"
+#include "Engine/DataTable.h"
 #include "Engine/SCS_Node.h"
 #include "Engine/SimpleConstructionScript.h"
+#include "Framework/Application/IInputProcessor.h"
+#include "Framework/Application/SlateApplication.h"
+#include "Framework/Commands/GenericCommands.h"
+#include "Framework/Commands/UICommandList.h"
 #include "GraphEditor.h"
 #include "IDetailsView.h"
+#include "IStructureDetailsView.h"
+#include "Kismet2/BlueprintEditorUtils.h"
 #include "MergeSession.h"
+#include "Misc/ITransaction.h"
+#include "ScopedTransaction.h"
+#include "UObject/StructOnScope.h"
+#include "UObject/UObjectHash.h"
 #include "Misc/ConfigCacheIni.h"
 #include "Modules/ModuleManager.h"
 #include "PropertyEditorModule.h"
@@ -124,6 +140,82 @@ namespace
 		}
 		return nullptr;
 	}
+
+	/** Property name of a key's property path ("A.B[1].C" -> "A"). */
+	FName FirstProperty(FString Path)
+	{
+		int32 Cut = INDEX_NONE;
+		if (Path.FindChar(TEXT('.'), Cut))
+			Path.LeftInline(Cut);
+		if (Path.FindChar(TEXT('['), Cut))
+			Path.LeftInline(Cut);
+		return FName(*Path);
+	}
+
+	/** Something the Blueprint owns, by its path below the Blueprint ("inner/<path>" keys). */
+	UObject* FindInner(UBlueprint* Blueprint, const FString& Path)
+	{
+		UObject* Found = nullptr;
+		ForEachObjectWithOuter(Blueprint, [&Found, Blueprint, &Path](UObject* Object)
+		{
+			if (!Found && Object->GetPathName(Blueprint) == Path)
+				Found = Object;
+		});
+		return Found;
+	}
+}
+
+namespace
+{
+	/** Passes every mouse event on to the window (without using it up), for dragging nodes between graphs. */
+	class FNodeDragProcessor : public IInputProcessor
+	{
+	public:
+		explicit FNodeDragProcessor(const TWeakPtr<SGitBlueprintMergeWindow>& InWindow) : Window(InWindow) {}
+
+		virtual void Tick(const float DeltaTime, FSlateApplication& SlateApp, TSharedRef<ICursor> Cursor) override {}
+
+		virtual bool HandleKeyDownEvent(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent) override
+		{
+			const TSharedPtr<SGitBlueprintMergeWindow> Pinned = Window.Pin();
+			return Pinned.IsValid() && Pinned->OnGraphKeyDown(InKeyEvent);
+		}
+
+		virtual bool HandleMouseButtonDownEvent(FSlateApplication& SlateApp, const FPointerEvent& MouseEvent) override
+		{
+			if (MouseEvent.GetEffectingButton() == EKeys::LeftMouseButton)
+				if (const TSharedPtr<SGitBlueprintMergeWindow> Pinned = Window.Pin())
+					Pinned->OnDragMouseDown(FVector2D(MouseEvent.GetScreenSpacePosition()));
+			return false;
+		}
+
+		virtual bool HandleMouseMoveEvent(FSlateApplication& SlateApp, const FPointerEvent& MouseEvent) override
+		{
+			if (const TSharedPtr<SGitBlueprintMergeWindow> Pinned = Window.Pin())
+				Pinned->OnDragMouseMove(FVector2D(MouseEvent.GetScreenSpacePosition()));
+			return false;
+		}
+
+		virtual bool HandleMouseButtonUpEvent(FSlateApplication& SlateApp, const FPointerEvent& MouseEvent) override
+		{
+			if (MouseEvent.GetEffectingButton() == EKeys::LeftMouseButton)
+				if (const TSharedPtr<SGitBlueprintMergeWindow> Pinned = Window.Pin())
+					Pinned->OnDragMouseUp(FVector2D(MouseEvent.GetScreenSpacePosition()));
+			return false;
+		}
+
+	private:
+		TWeakPtr<SGitBlueprintMergeWindow> Window;
+	};
+}
+
+SGitBlueprintMergeWindow::~SGitBlueprintMergeWindow()
+{
+	if (DragProcessor.IsValid() && FSlateApplication::IsInitialized())
+		FSlateApplication::Get().UnregisterInputPreProcessor(DragProcessor);
+
+	if (UTransBuffer* Buffer = GEditor ? Cast<UTransBuffer>(GEditor->Trans) : nullptr)
+		Buffer->OnTransactionStateChanged().RemoveAll(this);
 }
 
 void SGitBlueprintMergeWindow::Construct(const FArguments& InArgs)
@@ -137,6 +229,14 @@ void SGitBlueprintMergeWindow::Construct(const FArguments& InArgs)
 
 	BuildRows();
 	OnChoicesChanged();
+
+	// Edits by hand in the result are transactions; any new one (or an undo) needs a new confirmation.
+	if (UTransBuffer* Buffer = GEditor ? Cast<UTransBuffer>(GEditor->Trans) : nullptr)
+		Buffer->OnTransactionStateChanged().AddSP(this, &SGitBlueprintMergeWindow::OnTransactionStateChanged);
+
+	// Nodes can be dragged from ours, base or theirs into the result.
+	DragProcessor = MakeShared<FNodeDragProcessor>(StaticCastSharedRef<SGitBlueprintMergeWindow>(AsShared()));
+	FSlateApplication::Get().RegisterInputPreProcessor(DragProcessor);
 
 	const bool bHasConflicts = NumGroups() > 0;
 	const FText AssetName = FText::FromString(Session->GetAssetName());
@@ -401,7 +501,7 @@ void SGitBlueprintMergeWindow::Construct(const FArguments& InArgs)
 						.AutoWrapText(true)
 						.Text_Lambda([this]()
 						{
-							return FText::Format(LOCTEXT("ConfirmClose", "Close without merging? Your {0} decision(s) will be lost. Nothing in your project changes."), Choices.Num());
+							return FText::Format(LOCTEXT("ConfirmClose", "Close without merging? Your {0} decision(s) and {1} edit(s) by hand will be lost. Nothing in your project changes."), Choices.Num(), NumEdits());
 						})
 					]
 
@@ -432,6 +532,20 @@ void SGitBlueprintMergeWindow::Construct(const FArguments& InArgs)
 						})
 					]
 				]
+			]
+
+			// A new choice would build the result again over the edits by hand: ask first.
+			+ SVerticalBox::Slot()
+			.AutoHeight()
+			[
+				MakeDiscardBar()
+			]
+
+			// The result was edited by hand: confirm, undo or revert.
+			+ SVerticalBox::Slot()
+			.AutoHeight()
+			[
+				MakeEditsBar()
 			]
 
 			// The main area; its arrangement is the chosen layout (see MakeLayout).
@@ -575,6 +689,10 @@ void SGitBlueprintMergeWindow::Construct(const FArguments& InArgs)
 						{
 							if (!AllDecided())
 								return FText::Format(LOCTEXT("MergeBlockedTip", "Decide every conflict first ({0} left)."), NumGroups() - Choices.Num());
+							if (HasEdits() && !bEditsConfirmed)
+								return LOCTEXT("MergeEditsTip", "Confirm your edits to the result first (bar at the top).");
+							if (bConfirmingDiscard)
+								return LOCTEXT("MergeDiscardTip", "Answer the question at the top first.");
 							if (!CanMerge())
 								return LOCTEXT("MergeLeaveOutTip", "Some changes can't be merged yet (listed at the top): tick \"Leave out\" first.");
 							return LOCTEXT("MergeTip", "Merge, save and close");
@@ -1191,8 +1309,9 @@ TSharedRef<SWidget> SGitBlueprintMergeWindow::MakeOrderToggle(int32 Group)
 		.ToolTipText(LOCTEXT("SwapTip", "Swap which side's nodes run first"))
 		.OnClicked_Lambda([this, Group]()
 		{
-			Choices.Add(Group, Choices.FindRef(Group) == EResolution::Both ? EResolution::BothTheirsFirst : EResolution::Both);
-			OnChoicesChanged();
+			TMap<int32, EResolution> NewChoices = Choices;
+			NewChoices.Add(Group, Choices.FindRef(Group) == EResolution::Both ? EResolution::BothTheirsFirst : EResolution::Both);
+			SetChoices(NewChoices, false);
 			return FReply::Handled();
 		})
 		[
@@ -1220,8 +1339,11 @@ TSharedRef<SWidget> SGitBlueprintMergeWindow::MakeGraphColumn(EResolution Side, 
 	return SNew(SBorder)
 		.BorderImage(RoundedBrush())
 		.Padding(2.0f)
-		.BorderBackgroundColor_Lambda([this, Side, Color, bChoosable]()
+		.BorderBackgroundColor_Lambda([this, Side, Color, bChoosable, bResult]()
 		{
+			// While nodes are dragged in, frame the result (brighter when they'd land in it).
+			if (bResult && bDraggingNodes)
+				return FSlateColor(DecidedColor.CopyWithNewOpacity(bDropOverResult ? 1.0f : 0.5f));
 			// Frame the side(s) chosen for the selected conflict.
 			return FSlateColor(bChoosable && Takes(GetSelectedGroup(), Side) ? Color : FLinearColor::Transparent);
 		})
@@ -1250,6 +1372,47 @@ TSharedRef<SWidget> SGitBlueprintMergeWindow::MakeGraphColumn(EResolution Side, 
 						SNew(STextBlock)
 						.Text(Title)
 						.Font(FCoreStyle::GetDefaultFontStyle("Bold", 10))
+					]
+
+					// Result: how to edit it by hand (and, while dragging, where to let go).
+					+ SHorizontalBox::Slot()
+					.AutoWidth()
+					.VAlign(VAlign_Center)
+					.Padding(8.0f, 0.0f, 0.0f, 0.0f)
+					[
+						SNew(STextBlock)
+						.Visibility(bResult ? EVisibility::Visible : EVisibility::Collapsed)
+						.ToolTipText(LOCTEXT("EditableTip", "You can edit the result by hand: drag nodes in from ours or theirs, move nodes, drag wires between pins, "
+							"change pin values and the details below the graph. Every edit can be undone; confirm your edits before you merge."))
+						.ColorAndOpacity_Lambda([this]() { return bDraggingNodes ? FSlateColor(DecidedColor) : FSlateColor::UseSubduedForeground(); })
+						.Font_Lambda([this]() { return FCoreStyle::GetDefaultFontStyle(bDraggingNodes ? "Bold" : "Italic", 9); })
+						.Text_Lambda([this]()
+						{
+							if (bDraggingNodes)
+								return bDropOverResult ? LOCTEXT("DropHere", "Let go to copy the node(s) here") : LOCTEXT("DragHere", "Drag the node(s) into this graph");
+							return Session->GetPreview() ? LOCTEXT("EditableHintBP", "Editable: drag nodes here from ours / theirs") : LOCTEXT("EditableHint", "Editable: change values in the details below");
+						})
+					]
+
+					// Blueprints: copy nodes selected in a version into the result, or delete nodes selected in the result.
+					+ SHorizontalBox::Slot()
+					.AutoWidth()
+					.VAlign(VAlign_Center)
+					.Padding(8.0f, 0.0f, 0.0f, 0.0f)
+					[
+						SNew(SButton)
+						.Visibility_Lambda([this]() { return Session->GetPreview() ? EVisibility::Visible : EVisibility::Collapsed; })
+						.ToolTipText(bResult ? LOCTEXT("DeleteSelectedTip", "Delete the nodes selected in the result graph (\"Undo last edit\" brings them back)")
+							: LOCTEXT("CopySelectedTip", "Copy the nodes selected in this graph into the result (same as dragging them down). Wires between the copied nodes are kept; connect the rest by hand."))
+						.Text(bResult ? LOCTEXT("DeleteSelected", "Delete selected nodes") : LOCTEXT("CopyToResult", "Copy selected nodes to result"))
+						.OnClicked_Lambda([this, Side, bResult]()
+						{
+							if (bResult)
+								DeleteSelectedInResult();
+							else
+								CopySelectedToResult(Side);
+							return FReply::Handled();
+						})
 					]
 
 					// Result: keep both sides' nodes, for conflicts where that works.
@@ -1295,6 +1458,8 @@ TSharedRef<SWidget> SGitBlueprintMergeWindow::MakeGraphColumn(EResolution Side, 
 							SNew(SImage)
 							.Image_Lambda([this]()
 							{
+								if (HasEdits() && !bEditsConfirmed)
+									return FAppStyle::GetBrush("Icons.WarningWithColor");
 								return FAppStyle::GetBrush(Session->GetPreviewProblems().IsEmpty() ? "Icons.SuccessWithColor" : "Icons.ErrorWithColor");
 							})
 						]
@@ -1375,7 +1540,7 @@ TSharedRef<SWidget> SGitBlueprintMergeWindow::MakeGraphColumn(EResolution Side, 
 		];
 }
 
-TSharedRef<SWidget> SGitBlueprintMergeWindow::MakeGraphView(EResolution Side, UBlueprint* Blueprint, const TArray<FString>& NodeIds) const
+TSharedRef<SWidget> SGitBlueprintMergeWindow::MakeGraphView(EResolution Side, UBlueprint* Blueprint, const TArray<FString>& NodeIds)
 {
 	TArray<UEdGraphNode*> Nodes;
 	for (const FString& Id : NodeIds)
@@ -1421,12 +1586,28 @@ TSharedRef<SWidget> SGitBlueprintMergeWindow::MakeGraphView(EResolution Side, UB
 	const bool bInBase = Session->GetBase() && NodeIds.ContainsByPredicate([this](const FString& Id) { return FindNodeById(Session->GetBase(), Id) != nullptr; });
 	Appearance.CornerText = NodeIds.Num() > 0 && Nodes.Num() == 0 ? AbsentText(Side, bInBase) : FText::GetEmpty();
 
+	// The result can be edited by hand; the details of the nodes selected in it show (and edit) below the graph.
+	const bool bResult = Side == ResultColumn;
+	SGraphEditor::FGraphEditorEvents Events;
+	if (bResult)
+	{
+		ResultNodeDetails = MakeObjectDetails(true);
+		Events.OnSelectionChanged = SGraphEditor::FOnSelectionChanged::CreateLambda([this](const FGraphPanelSelectionSet& Selection)
+		{
+			if (ResultNodeDetails.IsValid())
+				ResultNodeDetails->SetObjects(Selection.Array());
+		});
+	}
+
 	TSharedRef<SGraphEditor> Editor = SNew(SGraphEditor)
 		.GraphToEdit(Graph)
-		.IsEditable(false)
-		.DisplayAsReadOnly(true)
+		.IsEditable(bResult)
+		.DisplayAsReadOnly(!bResult)
 		.ShowGraphStateOverlay(false)
-		.Appearance(Appearance);
+		.Appearance(Appearance)
+		.GraphEvents(Events)
+		.AdditionalCommands(Session->GetPreview() ? MakeGraphCommands(Side) : TSharedPtr<FUICommandList>());
+	GraphEditors.Add(Side, Editor);
 
 	// Select everything the change touches and bring it into view.
 	Nodes.RemoveAll([Graph](const UEdGraphNode* Node) { return Node->GetGraph() != Graph; });
@@ -1438,7 +1619,19 @@ TSharedRef<SWidget> SGitBlueprintMergeWindow::MakeGraphView(EResolution Side, UB
 	else if (Nodes.Num() > 1)
 		Editor->ZoomToFit(true);
 
-	return Editor;
+	if (!bResult)
+		return Editor;
+
+	TArray<UObject*> Selected;
+	for (UEdGraphNode* Node : Nodes)
+		Selected.Add(Node);
+	ResultNodeDetails->SetObjects(Selected);
+
+	return SNew(SSplitter)
+		.Orientation(Orient_Vertical)
+		.PhysicalSplitterHandleSize(4.0f)
+		+ SSplitter::Slot().Value(0.72f)[Editor]
+		+ SSplitter::Slot().Value(0.28f)[ResultNodeDetails.ToSharedRef()];
 }
 
 void SGitBlueprintMergeWindow::OnSelectionChanged(TSharedPtr<FRow> Row, ESelectInfo::Type SelectInfo)
@@ -1463,8 +1656,17 @@ void SGitBlueprintMergeWindow::ShowRow(const FRow* Row)
 	ResultBox->SetContent(MakeSideView(ResultColumn, Row));
 }
 
-TSharedRef<SWidget> SGitBlueprintMergeWindow::MakeSideView(EResolution Side, const FRow* Row) const
+TSharedRef<SWidget> SGitBlueprintMergeWindow::MakeSideView(EResolution Side, const FRow* Row)
 {
+	GraphEditors.Remove(Side);
+	GraphCommands.Remove(Side);
+	RowViews.Remove(Side);
+	if (Side == ResultColumn)
+	{
+		ResultNodeDetails.Reset();
+		ResultTable.Reset();
+	}
+
 	UObject* Asset = Side == EResolution::Ours ? Session->GetOursAsset()
 		: Side == EResolution::Theirs ? Session->GetTheirsAsset()
 		: Side == ResultColumn ? Session->GetPreviewAsset()
@@ -1505,7 +1707,7 @@ TSharedRef<SWidget> SGitBlueprintMergeWindow::MakeSideView(EResolution Side, con
 				MakeGraphView(Side, Blueprint, bHasNodes ? Row->NodeIds : TArray<FString>())
 			];
 	}
-	else if (const TSharedPtr<SWidget> Details = Row ? MakeDetailsView(Asset, *Row) : nullptr)
+	else if (const TSharedPtr<SWidget> Details = Row ? MakeDetailsView(Side, Asset, *Row) : nullptr)
 	{
 		View->AddSlot()
 			.FillHeight(1.0f)
@@ -1534,18 +1736,34 @@ TSharedRef<SWidget> SGitBlueprintMergeWindow::MakeSideView(EResolution Side, con
 	return View;
 }
 
-TSharedPtr<SWidget> SGitBlueprintMergeWindow::MakeDetailsView(UObject* Asset, const FRow& Row) const
+TSharedPtr<SWidget> SGitBlueprintMergeWindow::MakeDetailsView(EResolution Side, UObject* Asset, const FRow& Row)
 {
-	// Class defaults for variables and class default properties, the component template for components;
-	// the asset itself for properties and parameters of data assets and material instances.
+	// Class defaults for variables and class default properties, the component template for components, the
+	// Blueprint for Class Settings, the widget (or its slot) for widgets; the asset itself for properties and
+	// parameters of data assets and material instances; the row for data tables.
+	const bool bEditable = Side == ResultColumn;
 	UBlueprint* Blueprint = Cast<UBlueprint>(Asset);
+	UDataTable* Table = Cast<UDataTable>(Asset);
 	UObject* Object = nullptr;
 	FName PropertyName;
+	FName RowName;
 	for (int32 Index : Row.Values)
 	{
 		const FString& Key = Session->GetPlan().Decisions[Index].Key;
 		UObject* Found = nullptr;
 		FName FoundName;
+
+		if (Table)
+		{
+			if (Key.StartsWith(TEXT("row/")))
+			{
+				FString Id = Key.Mid(4), Field;
+				Key.Mid(4).Split(TEXT("/"), &Id, &Field);
+				RowName = FName(*Id.Replace(TEXT("%2F"), TEXT("/")).Replace(TEXT("%25"), TEXT("%")));
+				break;
+			}
+			continue;
+		}
 
 		if (!Blueprint)
 		{
@@ -1556,19 +1774,33 @@ TSharedPtr<SWidget> SGitBlueprintMergeWindow::MakeDetailsView(UObject* Asset, co
 				Key.Mid(6).Split(TEXT("/"), &Name, nullptr);
 			if (!Name.IsEmpty())
 			{
-				int32 Cut = INDEX_NONE;
-				if (Name.FindChar(TEXT('.'), Cut))
-					Name.LeftInline(Cut);
-				if (Name.FindChar(TEXT('['), Cut))
-					Name.LeftInline(Cut);
 				Found = Asset;
-				FoundName = FName(*Name);
+				FoundName = FirstProperty(Name);
 			}
 		}
 		else if (Key.StartsWith(TEXT("cdo/")))
 		{
 			Found = Blueprint->GeneratedClass ? Blueprint->GeneratedClass->GetDefaultObject() : nullptr;
 			FoundName = FName(*Key.Mid(4));
+		}
+		else if (Key.StartsWith(TEXT("bp/")))
+		{
+			Found = Blueprint;
+			FoundName = FirstProperty(Key.Mid(3));
+		}
+		else if (Key.StartsWith(TEXT("inner/")))
+		{
+			FString Path = Key.Mid(6), Property;
+			Key.Mid(6).Split(TEXT("/"), &Path, &Property);
+			Found = FindInner(Blueprint, Path);
+			if (Property.StartsWith(TEXT("Slot.")))
+			{
+				const UWidget* Widget = Cast<UWidget>(Found);
+				Found = Widget ? Widget->Slot : nullptr;
+				Property = Property.Mid(5);
+			}
+			if (!Property.IsEmpty())
+				FoundName = FirstProperty(Property);
 		}
 		else if (Key.StartsWith(TEXT("var/")))
 		{
@@ -1606,20 +1838,38 @@ TSharedPtr<SWidget> SGitBlueprintMergeWindow::MakeDetailsView(UObject* Asset, co
 			break;
 	}
 
+	// A data table row: its struct, edited in place (NotifyPreChange records the table for undo).
+	if (Table)
+	{
+		uint8* RowData = RowName.IsNone() ? nullptr : Table->FindRowUnchecked(RowName);
+		if (!RowData || !Table->GetRowStruct())
+			return nullptr;
+
+		FDetailsViewArgs Args;
+		Args.bAllowSearch = true;
+		Args.bHideSelectionTip = true;
+		Args.bShowOptions = false;
+		Args.bAllowFavoriteSystem = false;
+		Args.NameAreaSettings = FDetailsViewArgs::HideNameArea;
+		Args.NotifyHook = bEditable ? this : nullptr;
+
+		FPropertyEditorModule& PropertyEditor = FModuleManager::LoadModuleChecked<FPropertyEditorModule>("PropertyEditor");
+		const TSharedRef<IStructureDetailsView> View = PropertyEditor.CreateStructureDetailView(Args, FStructureDetailsViewArgs(),
+			MakeShared<FStructOnScope>(Table->GetRowStruct(), RowData), FText::FromName(RowName));
+		View->GetDetailsView()->SetIsPropertyEditingEnabledDelegate(FIsPropertyEditingEnabled::CreateLambda([bEditable]() { return bEditable; }));
+		RowViews.Add(Side, View);
+		if (bEditable)
+		{
+			ResultTable = Table;
+			ResultRowName = RowName;
+		}
+		return View->GetWidget();
+	}
+
 	if (!Object)
 		return nullptr;
 
-	FDetailsViewArgs Args;
-	Args.bAllowSearch = true;
-	Args.bHideSelectionTip = true;
-	Args.bShowPropertyMatrixButton = false;
-	Args.bShowOptions = false;
-	Args.bAllowFavoriteSystem = false;
-	Args.NameAreaSettings = FDetailsViewArgs::HideNameArea;
-
-	FPropertyEditorModule& PropertyEditor = FModuleManager::LoadModuleChecked<FPropertyEditorModule>("PropertyEditor");
-	const TSharedRef<IDetailsView> Details = PropertyEditor.CreateDetailView(Args);
-	Details->SetIsPropertyEditingEnabledDelegate(FIsPropertyEditingEnabled::CreateLambda([]() { return false; }));
+	const TSharedRef<IDetailsView> Details = MakeObjectDetails(bEditable);
 	Details->SetObject(Object);
 
 	// Point at the property in question; the rows exist after the first tick, so scroll then.
@@ -1640,6 +1890,22 @@ TSharedPtr<SWidget> SGitBlueprintMergeWindow::MakeDetailsView(UObject* Asset, co
 	return Details;
 }
 
+TSharedRef<IDetailsView> SGitBlueprintMergeWindow::MakeObjectDetails(bool bEditable) const
+{
+	FDetailsViewArgs Args;
+	Args.bAllowSearch = true;
+	Args.bHideSelectionTip = true;
+	Args.bShowPropertyMatrixButton = false;
+	Args.bShowOptions = false;
+	Args.bAllowFavoriteSystem = false;
+	Args.NameAreaSettings = FDetailsViewArgs::HideNameArea;
+
+	FPropertyEditorModule& PropertyEditor = FModuleManager::LoadModuleChecked<FPropertyEditorModule>("PropertyEditor");
+	const TSharedRef<IDetailsView> Details = PropertyEditor.CreateDetailView(Args);
+	Details->SetIsPropertyEditingEnabledDelegate(FIsPropertyEditingEnabled::CreateLambda([bEditable]() { return bEditable; }));
+	return Details;
+}
+
 TSharedRef<SWidget> SGitBlueprintMergeWindow::MakeValuePanel(EResolution Side, const FRow& Row) const
 {
 	const FMergePlan& Plan = Session->GetPlan();
@@ -1650,6 +1916,7 @@ TSharedRef<SWidget> SGitBlueprintMergeWindow::MakeValuePanel(EResolution Side, c
 		FString Subject;
 		TOptional<FString> Value;
 		FString Key;
+		TArray<FString> Keys;
 		bool bChanged = false;
 		bool bInBase = false;
 	};
@@ -1670,6 +1937,7 @@ TSharedRef<SWidget> SGitBlueprintMergeWindow::MakeValuePanel(EResolution Side, c
 			Line = &Lines.AddDefaulted_GetRef();
 			Line->Subject = Subject;
 		}
+		Line->Keys.Add(Decision.Key);
 		if (!Line->Value.IsSet() && Value.IsSet())
 		{
 			Line->Value = Value;
@@ -1702,7 +1970,20 @@ TSharedRef<SWidget> SGitBlueprintMergeWindow::MakeValuePanel(EResolution Side, c
 				.AutoHeight()
 				[
 					SNew(STextBlock)
-					.Text(Line.Value.IsSet() ? FText::FromString(Session->ValueText(Line.Key, Line.Value)) : AbsentText(Side, Line.bInBase))
+					.Text_Lambda([this, Side, Line]()
+					{
+						// The result follows edits by hand, so read it from the preview each time.
+						if (Side == ResultColumn)
+						{
+							for (const FString& Key : Line.Keys)
+							{
+								if (const FString* Value = Session->GetPreviewSnapshot().Facts.Find(Key))
+									return FText::FromString(Session->ValueText(Key, TOptional<FString>(*Value)));
+							}
+							return AbsentText(Side, Line.bInBase);
+						}
+						return Line.Value.IsSet() ? FText::FromString(Session->ValueText(Line.Key, Line.Value)) : AbsentText(Side, Line.bInBase);
+					})
 					.Font(FCoreStyle::GetDefaultFontStyle(Line.Value.IsSet() ? "Bold" : "Italic", 13))
 					.ColorAndOpacity(Line.bChanged ? FSlateColor(FMath::Lerp(Color, FLinearColor::White, 0.35f)) : FSlateColor::UseForeground())
 					.AutoWrapText(true)
@@ -1723,31 +2004,588 @@ void SGitBlueprintMergeWindow::Choose(int32 Group, EResolution Side)
 	if (Group == INDEX_NONE)
 		return;
 
-	Choices.Add(Group, Side);
-	OnChoicesChanged();
+	TMap<int32, EResolution> NewChoices = Choices;
+	NewChoices.Add(Group, Side);
 
 	// Go on to the next open conflict, so the conflicts can be worked through in one pass.
-	SelectConflict(1, true);
+	SetChoices(NewChoices, true);
 }
 
 void SGitBlueprintMergeWindow::ChooseAll(EResolution Side)
 {
+	TMap<int32, EResolution> NewChoices = Choices;
 	for (int32 Group = 0; Group < NumGroups(); ++Group)
-		Choices.Add(Group, Side);
+		NewChoices.Add(Group, Side);
 
+	SetChoices(NewChoices, false);
+}
+
+void SGitBlueprintMergeWindow::SetChoices(const TMap<int32, EResolution>& NewChoices, bool bAdvance)
+{
+	// The result is built again for new choices, which would drop the edits by hand: ask first.
+	if (HasEdits())
+	{
+		PendingChoices = NewChoices;
+		bPendingAdvance = bAdvance;
+		bConfirmingDiscard = true;
+		return;
+	}
+
+	Choices = NewChoices;
 	OnChoicesChanged();
+	if (bAdvance)
+		SelectConflict(1, true);
 }
 
 void SGitBlueprintMergeWindow::OnChoicesChanged()
 {
 	Problems.Reset();
+	EditsMessage.Reset();
 	bConfirmingClose = false;
+	bConfirmingDiscard = false;
+	bConfirmingRevert = false;
+	bEditsConfirmed = false;
 	bNeedsLeaveOut = Session->NeedsLeaveOut(Choices);
 
-	// Rebuild the result with these choices and show it.
+	// Rebuild the result with these choices and show it. It starts without edits by hand, so nothing to undo.
+	bInternalChange = true;
 	Session->UpdatePreview(Choices);
+	if (GEditor)
+		GEditor->ResetTransaction(LOCTEXT("ResultRebuilt", "Merge result built again"));
+	bInternalChange = false;
+
+	RefreshResult();
+}
+
+void SGitBlueprintMergeWindow::RefreshResult()
+{
 	if (ResultBox.IsValid())
 		ResultBox->SetContent(MakeSideView(ResultColumn, GetSelectedRow()));
+}
+
+int32 SGitBlueprintMergeWindow::NumEdits() const
+{
+	const UTransactor* Transactor = GEditor ? GEditor->Trans.Get() : nullptr;
+	return Transactor ? FMath::Max(0, Transactor->GetQueueLength() - Transactor->GetUndoCount()) : 0;
+}
+
+void SGitBlueprintMergeWindow::OnTransactionStateChanged(const FTransactionContext& Context, ETransactionStateEventType State)
+{
+	if (bInternalChange || (State != ETransactionStateEventType::TransactionFinalized && State != ETransactionStateEventType::UndoRedoFinalized))
+		return;
+
+	// Something changed in the result: what was confirmed no longer is.
+	bEditsConfirmed = false;
+	bConfirmingClose = false;
+	bConfirmingRevert = false;
+	EditsMessage.Reset();
+	Problems.Reset();
+	Session->RefreshPreviewSnapshot();
+}
+
+void SGitBlueprintMergeWindow::UndoEdit()
+{
+	if (!HasEdits() || !GEditor)
+		return;
+
+	GEditor->UndoTransaction();
+	AfterUndoRedo();
+}
+
+void SGitBlueprintMergeWindow::RedoEdit()
+{
+	if (!GEditor || !GEditor->Trans || !GEditor->Trans->CanRedo())
+		return;
+
+	GEditor->RedoTransaction();
+	AfterUndoRedo();
+}
+
+void SGitBlueprintMergeWindow::AfterUndoRedo()
+{
+	// The views are built again; keep the keyboard on the result graph when it was there (Ctrl+Z pressed twice).
+	const TSharedPtr<SGraphEditor> Before = GraphEditors.FindRef(ResultColumn).Pin();
+	const bool bHadFocus = Before.IsValid() && Before->HasFocusedDescendants();
+
+	Session->RefreshPreviewSnapshot();
+	RefreshResult();
+
+	if (const TSharedPtr<SGraphEditor> After = GraphEditors.FindRef(ResultColumn).Pin(); bHadFocus && After.IsValid())
+		FSlateApplication::Get().SetKeyboardFocus(After, EFocusCause::SetDirectly);
+}
+
+void SGitBlueprintMergeWindow::CopyToClipboard(EResolution Side)
+{
+	const TSharedPtr<SGraphEditor> Editor = GraphEditors.FindRef(Side).Pin();
+	if (!Editor.IsValid())
+		return;
+
+	ClipboardNodes.Reset();
+	for (UObject* Object : Editor->GetSelectedNodes())
+	{
+		if (UEdGraphNode* Node = Cast<UEdGraphNode>(Object))
+			ClipboardNodes.Add(Node);
+	}
+	ClipboardSource = Side == ResultColumn ? Session->GetPreview()
+		: Side == EResolution::Ours ? Session->GetOurs()
+		: Side == EResolution::Theirs ? Session->GetTheirs()
+		: Session->GetBase();
+}
+
+void SGitBlueprintMergeWindow::PasteFromClipboard()
+{
+	TArray<UEdGraphNode*> Nodes;
+	for (const TWeakObjectPtr<UEdGraphNode>& Node : ClipboardNodes)
+	{
+		if (Node.IsValid())
+			Nodes.Add(Node.Get());
+	}
+
+	const TSharedPtr<SGraphEditor> Result = GraphEditors.FindRef(ResultColumn).Pin();
+	if (Nodes.IsEmpty() || !ClipboardSource.IsValid() || !Result.IsValid())
+	{
+		EditsMessage = TEXT("Nothing to paste: select nodes in a graph and press Ctrl+C first.");
+		return;
+	}
+
+	// Where the mouse last was in the result graph.
+	const FVector2D At = FVector2D(Result->GetPasteLocation2f());
+	CopyNodesToResult(ClipboardSource.Get(), Nodes, &At);
+}
+
+bool SGitBlueprintMergeWindow::OnGraphKeyDown(const FKeyEvent& InKeyEvent)
+{
+	// Typing in a pin value or a details field keeps its own Ctrl+C / Delete / Ctrl+Z.
+	if (const TSharedPtr<SWidget> Focused = FSlateApplication::Get().GetKeyboardFocusedWidget())
+	{
+		const FString Type = Focused->GetTypeAsString();
+		if (Type.Contains(TEXT("EditableText")) || Type.Contains(TEXT("TextBox")))
+			return false;
+	}
+
+	// The graphs don't take keyboard focus on a click, so the shortcuts go to the graph under the mouse.
+	const FVector2D Cursor = FSlateApplication::Get().GetCursorPos();
+	for (const EResolution Side : {ResultColumn, EResolution::Ours, EResolution::Theirs, EResolution::Unchanged})
+	{
+		if (Side == EResolution::Unchanged && !bShowBase)
+			continue;
+
+		const TSharedPtr<SGraphEditor> Editor = GraphEditors.FindRef(Side).Pin();
+		const TSharedPtr<FUICommandList> Commands = GraphCommands.FindRef(Side);
+		if (Editor.IsValid() && Commands.IsValid() && Editor->GetTickSpaceGeometry().IsUnderLocation(Cursor))
+			return Commands->ProcessCommandBindings(InKeyEvent);
+	}
+	return false;
+}
+
+TSharedRef<FUICommandList> SGitBlueprintMergeWindow::MakeGraphCommands(EResolution Side)
+{
+	// Graph editing only: copy anywhere; paste, delete, undo and redo in the result. Everything else stays on buttons.
+	const TSharedRef<FUICommandList> Commands = MakeShared<FUICommandList>();
+	GraphCommands.Add(Side, Commands);
+	Commands->MapAction(FGenericCommands::Get().Copy, FExecuteAction::CreateLambda([this, Side]() { CopyToClipboard(Side); }));
+	if (Side != ResultColumn)
+		return Commands;
+
+	Commands->MapAction(FGenericCommands::Get().Paste, FExecuteAction::CreateLambda([this]() { PasteFromClipboard(); }));
+	Commands->MapAction(FGenericCommands::Get().Delete, FExecuteAction::CreateLambda([this]() { DeleteSelectedInResult(); }));
+	Commands->MapAction(FGenericCommands::Get().Undo, FExecuteAction::CreateLambda([this]() { UndoEdit(); }));
+	Commands->MapAction(FGenericCommands::Get().Redo, FExecuteAction::CreateLambda([this]() { RedoEdit(); }));
+	return Commands;
+}
+
+void SGitBlueprintMergeWindow::RevertEdits()
+{
+	// Back to the result as the choices make it.
+	OnChoicesChanged();
+}
+
+void SGitBlueprintMergeWindow::ConfirmEdits()
+{
+	bInternalChange = true;
+	const bool bCompiles = Session->CheckEditedPreview();
+	bInternalChange = false;
+
+	bEditsConfirmed = bCompiles;
+	EditsMessage = bCompiles ? FString() : TEXT("Not confirmed, the result doesn't compile: ") + FString::Join(Session->GetPreviewProblems(), TEXT(" "));
+	RefreshResult();
+}
+
+void SGitBlueprintMergeWindow::CopySelectedToResult(EResolution Side, const FVector2D* DropAt)
+{
+	UBlueprint* Source = Side == EResolution::Ours ? Session->GetOurs()
+		: Side == EResolution::Theirs ? Session->GetTheirs()
+		: Session->GetBase();
+	UBlueprint* Target = Session->GetPreview();
+	const TSharedPtr<SGraphEditor> Editor = GraphEditors.FindRef(Side).Pin();
+	if (!Source || !Target || !Editor.IsValid())
+		return;
+
+	TArray<UEdGraphNode*> Nodes;
+	for (UObject* Object : Editor->GetSelectedNodes())
+	{
+		if (UEdGraphNode* Node = Cast<UEdGraphNode>(Object))
+			Nodes.Add(Node);
+	}
+	if (Nodes.IsEmpty())
+	{
+		EditsMessage = TEXT("Select the nodes to copy in that graph first.");
+		return;
+	}
+
+	CopyNodesToResult(Source, Nodes, DropAt);
+}
+
+void SGitBlueprintMergeWindow::CopyNodesToResult(UBlueprint* Source, const TArray<UEdGraphNode*>& Nodes, const FVector2D* DropAt)
+{
+	UBlueprint* Target = Session->GetPreview();
+	if (!Source || !Target || Nodes.IsEmpty())
+		return;
+
+	// From the button: put the copies in the middle of what the result graph shows, not on top of existing nodes.
+	const TSharedPtr<SGraphEditor> Result = GraphEditors.FindRef(ResultColumn).Pin();
+	FVector2D Center;
+	if (!DropAt && Result.IsValid())
+	{
+		float Zoom = 1.0f;
+		Result->GetViewLocation(Center, Zoom);
+		Center += FVector2D(Result->GetTickSpaceGeometry().GetLocalSize()) * 0.5 / FMath::Max(Zoom, 0.01f);
+		DropAt = &Center;
+	}
+
+	FString Problem;
+	TArray<UEdGraphNode*> Copies;
+	{
+		const FScopedTransaction Transaction(LOCTEXT("CopyToResultTransaction", "Copy nodes into the merge result"));
+		Copies = GitBlueprintMerge::CopyNodes(Nodes, Source, Target, Problem, DropAt);
+	}
+	if (!Problem.IsEmpty())
+		EditsMessage = Problem;
+	else if (Copies.IsEmpty())
+		EditsMessage = TEXT("Nothing was copied.");
+
+	// Redraw the result graph with the copies in it, selected.
+	if (Result.IsValid())
+	{
+		Result->NotifyGraphChanged();
+		Result->ClearSelectionSet();
+		for (UEdGraphNode* Copy : Copies)
+		{
+			if (Copy->GetGraph() == Result->GetCurrentGraph())
+				Result->SetNodeSelection(Copy, true);
+		}
+	}
+}
+
+void SGitBlueprintMergeWindow::OnDragMouseDown(const FVector2D& ScreenPos)
+{
+	DragSide.Reset();
+	bDraggingNodes = false;
+	if (!Session->GetPreview())
+		return;
+
+	// Only a press on a node (or its pins) in a version's graph starts a drag; elsewhere it's a pan or a box select.
+	const FWidgetPath Path = FSlateApplication::Get().LocateWindowUnderMouse(ScreenPos, FSlateApplication::Get().GetInteractiveTopLevelWindows());
+	bool bOnNode = false;
+	for (int32 Index = 0; Index < Path.Widgets.Num() && !bOnNode; ++Index)
+		bOnNode = Path.Widgets[Index].Widget->GetTypeAsString().StartsWith(TEXT("SGraphNode"));
+	if (!bOnNode)
+		return;
+
+	for (const EResolution Side : {EResolution::Ours, EResolution::Theirs, EResolution::Unchanged})
+	{
+		const TSharedPtr<SGraphEditor> Editor = GraphEditors.FindRef(Side).Pin();
+		if (Editor.IsValid() && Path.ContainsWidget(Editor.Get()))
+		{
+			DragSide = Side;
+			DragStart = ScreenPos;
+			return;
+		}
+	}
+}
+
+void SGitBlueprintMergeWindow::OnDragMouseMove(const FVector2D& ScreenPos)
+{
+	if (DragSide.IsSet() && !bDraggingNodes && FVector2D::Distance(ScreenPos, DragStart) > FSlateApplication::Get().GetDragTriggerDistance())
+		bDraggingNodes = true;
+	if (bDraggingNodes)
+		bDropOverResult = IsOverResultGraph(ScreenPos);
+}
+
+void SGitBlueprintMergeWindow::OnDragMouseUp(const FVector2D& ScreenPos)
+{
+	const bool bDrop = bDraggingNodes && DragSide.IsSet() && IsOverResultGraph(ScreenPos);
+	const EResolution Side = DragSide.Get(EResolution::Unchanged);
+	DragSide.Reset();
+	bDraggingNodes = false;
+	bDropOverResult = false;
+	if (!bDrop)
+		return;
+
+	// Where it was dropped, in result graph coordinates.
+	const TSharedPtr<SGraphEditor> Result = GraphEditors.FindRef(ResultColumn).Pin();
+	FVector2D View;
+	float Zoom = 1.0f;
+	Result->GetViewLocation(View, Zoom);
+	const FVector2D Local = FVector2D(Result->GetTickSpaceGeometry().AbsoluteToLocal(ScreenPos));
+	const FVector2D DropAt = View + Local / FMath::Max(Zoom, 0.01f);
+
+	// After this event the source graph handles the release; copy on the next tick, when its selection is final.
+	const TWeakPtr<SGitBlueprintMergeWindow> Weak = StaticCastSharedRef<SGitBlueprintMergeWindow>(AsShared());
+	RegisterActiveTimer(0.0f, FWidgetActiveTimerDelegate::CreateLambda([Weak, Side, DropAt](double, float)
+	{
+		if (const TSharedPtr<SGitBlueprintMergeWindow> Window = Weak.Pin())
+			Window->CopySelectedToResult(Side, &DropAt);
+		return EActiveTimerReturnType::Stop;
+	}));
+}
+
+bool SGitBlueprintMergeWindow::IsOverResultGraph(const FVector2D& ScreenPos) const
+{
+	const TSharedPtr<SGraphEditor> Result = GraphEditors.FindRef(ResultColumn).Pin();
+	return Result.IsValid() && Result->GetTickSpaceGeometry().IsUnderLocation(ScreenPos);
+}
+
+void SGitBlueprintMergeWindow::DeleteSelectedInResult()
+{
+	UBlueprint* Blueprint = Session->GetPreview();
+	const TSharedPtr<SGraphEditor> Editor = GraphEditors.FindRef(ResultColumn).Pin();
+	if (!Blueprint || !Editor.IsValid())
+		return;
+
+	TArray<UEdGraphNode*> Nodes;
+	for (UObject* Object : Editor->GetSelectedNodes())
+	{
+		UEdGraphNode* Node = Cast<UEdGraphNode>(Object);
+		if (Node && Node->CanUserDeleteNode())
+			Nodes.Add(Node);
+	}
+	if (Nodes.IsEmpty())
+	{
+		EditsMessage = TEXT("Select nodes in the result graph to delete first (some nodes, like function entries, can't be deleted).");
+		return;
+	}
+
+	{
+		const FScopedTransaction Transaction(LOCTEXT("DeleteInResultTransaction", "Delete nodes from the merge result"));
+		for (UEdGraphNode* Node : Nodes)
+		{
+			Node->GetGraph()->Modify();
+			Node->Modify();
+			FBlueprintEditorUtils::RemoveNode(Blueprint, Node, /*bDontRecompile=*/true);
+		}
+	}
+
+	Editor->NotifyGraphChanged();
+	Editor->ClearSelectionSet();
+	if (ResultNodeDetails.IsValid())
+		ResultNodeDetails->SetObjects(TArray<UObject*>());
+}
+
+void SGitBlueprintMergeWindow::NotifyPreChange(FProperty* PropertyAboutToChange)
+{
+	// Data table rows are plain memory to the details view; record the table so the edit can be undone.
+	UDataTable* Table = ResultTable.Get();
+	if (!Table || bInRowEdit || !GEditor)
+		return;
+
+	bInRowEdit = true;
+	GEditor->BeginTransaction(LOCTEXT("EditRowTransaction", "Edit a row of the merge result"));
+	Table->Modify();
+}
+
+void SGitBlueprintMergeWindow::NotifyPostChange(const FPropertyChangedEvent& PropertyChangedEvent, FProperty* PropertyThatChanged)
+{
+	if (!bInRowEdit)
+		return;
+
+	bInRowEdit = false;
+	if (UDataTable* Table = ResultTable.Get())
+		Table->HandleDataTableChanged(ResultRowName);
+	if (GEditor)
+		GEditor->EndTransaction();
+}
+
+TSharedRef<SWidget> SGitBlueprintMergeWindow::MakeDiscardBar()
+{
+	return SNew(SBorder)
+		.BorderImage(FAppStyle::GetBrush("WhiteBrush"))
+		.BorderBackgroundColor(OpenColor.CopyWithNewOpacity(0.30f))
+		.Padding(FMargin(16.0f, 8.0f))
+		.Visibility_Lambda([this]() { return bConfirmingDiscard ? EVisibility::Visible : EVisibility::Collapsed; })
+		[
+			SNew(SHorizontalBox)
+
+			+ SHorizontalBox::Slot()
+			.FillWidth(1.0f)
+			.VAlign(VAlign_Center)
+			[
+				SNew(STextBlock)
+				.AutoWrapText(true)
+				.Text_Lambda([this]()
+				{
+					return FText::Format(LOCTEXT("ConfirmDiscard", "A new choice builds the result again from ours and theirs: your {0} edit(s) by hand will be lost."), NumEdits());
+				})
+			]
+
+			+ SHorizontalBox::Slot()
+			.AutoWidth()
+			.Padding(8.0f, 0.0f, 0.0f, 0.0f)
+			[
+				SNew(SButton)
+				.Text(LOCTEXT("DropEdits", "Drop my edits and apply the choice"))
+				.OnClicked_Lambda([this]()
+				{
+					Choices = PendingChoices;
+					OnChoicesChanged();
+					if (bPendingAdvance)
+						SelectConflict(1, true);
+					return FReply::Handled();
+				})
+			]
+
+			+ SHorizontalBox::Slot()
+			.AutoWidth()
+			.Padding(4.0f, 0.0f, 0.0f, 0.0f)
+			[
+				SNew(SButton)
+				.Text(LOCTEXT("KeepEdits", "Keep my edits"))
+				.OnClicked_Lambda([this]()
+				{
+					bConfirmingDiscard = false;
+					return FReply::Handled();
+				})
+			]
+		];
+}
+
+TSharedRef<SWidget> SGitBlueprintMergeWindow::MakeEditsBar()
+{
+	return SNew(SBorder)
+		.BorderImage(FAppStyle::GetBrush("WhiteBrush"))
+		.BorderBackgroundColor_Lambda([this]() { return FSlateColor((bEditsConfirmed ? DecidedColor : OpenColor).CopyWithNewOpacity(0.22f)); })
+		.Padding(FMargin(16.0f, 8.0f))
+		.Visibility_Lambda([this]() { return HasEdits() || !EditsMessage.IsEmpty() ? EVisibility::Visible : EVisibility::Collapsed; })
+		[
+			SNew(SHorizontalBox)
+
+			+ SHorizontalBox::Slot()
+			.AutoWidth()
+			.VAlign(VAlign_Top)
+			.Padding(0.0f, 1.0f, 8.0f, 0.0f)
+			[
+				SNew(SImage)
+				.Image_Lambda([this]() { return FAppStyle::GetBrush(bEditsConfirmed ? "Icons.SuccessWithColor" : "Icons.WarningWithColor"); })
+			]
+
+			+ SHorizontalBox::Slot()
+			.FillWidth(1.0f)
+			.VAlign(VAlign_Center)
+			[
+				SNew(SVerticalBox)
+
+				+ SVerticalBox::Slot()
+				.AutoHeight()
+				[
+					SNew(STextBlock)
+					.AutoWrapText(true)
+					.Visibility_Lambda([this]() { return HasEdits() ? EVisibility::Visible : EVisibility::Collapsed; })
+					.Font(FCoreStyle::GetDefaultFontStyle("Bold", 10))
+					.Text_Lambda([this]()
+					{
+						if (bConfirmingRevert)
+							return FText::Format(LOCTEXT("ConfirmRevert", "Drop all {0} edit(s) by hand and go back to the result your choices make? This can't be undone."), NumEdits());
+						return bEditsConfirmed
+							? FText::Format(LOCTEXT("EditsConfirmed", "Your {0} edit(s) by hand are confirmed. Merge saves the result as you left it."), NumEdits())
+							: FText::Format(LOCTEXT("EditsOpen", "You changed the result by hand ({0} change(s)). When it looks right, press \"Confirm my edits\"; Merge stays off until then. "
+								"\"Undo last edit\" takes back your last change, \"Revert all edits\" throws all of them away."), NumEdits());
+					})
+				]
+
+				+ SVerticalBox::Slot()
+				.AutoHeight()
+				.Padding(0.0f, 2.0f, 0.0f, 0.0f)
+				[
+					SNew(STextBlock)
+					.AutoWrapText(true)
+					.Visibility_Lambda([this]() { return EditsMessage.IsEmpty() ? EVisibility::Collapsed : EVisibility::Visible; })
+					.ColorAndOpacity(FMath::Lerp(ErrorColor, FLinearColor::White, 0.35f))
+					.Text_Lambda([this]() { return FText::FromString(EditsMessage); })
+				]
+			]
+
+			// Normal state: confirm, undo one, revert all.
+			+ SHorizontalBox::Slot()
+			.AutoWidth()
+			.VAlign(VAlign_Center)
+			.Padding(8.0f, 0.0f, 0.0f, 0.0f)
+			[
+				SNew(SHorizontalBox)
+				.Visibility_Lambda([this]() { return HasEdits() && !bConfirmingRevert ? EVisibility::Visible : EVisibility::Collapsed; })
+
+				+ SHorizontalBox::Slot()
+				.AutoWidth()
+				[
+					SNew(SButton)
+					.ButtonStyle(FAppStyle::Get(), "PrimaryButton")
+					.Visibility_Lambda([this]() { return bEditsConfirmed ? EVisibility::Collapsed : EVisibility::Visible; })
+					.ToolTipText(LOCTEXT("ConfirmEditsTip", "Check the edited result (Blueprints are compiled) and accept it for Merge"))
+					.OnClicked_Lambda([this]() { ConfirmEdits(); return FReply::Handled(); })
+					[
+						SNew(STextBlock)
+						.Text(LOCTEXT("ConfirmEdits", "Confirm my edits"))
+						.Font(FCoreStyle::GetDefaultFontStyle("Bold", 10))
+					]
+				]
+
+				+ SHorizontalBox::Slot()
+				.AutoWidth()
+				.Padding(4.0f, 0.0f, 0.0f, 0.0f)
+				[
+					SNew(SButton)
+					.Text(LOCTEXT("UndoEdit", "Undo last edit"))
+					.ToolTipText(LOCTEXT("UndoEditTip", "Take back the last edit by hand in the result"))
+					.OnClicked_Lambda([this]() { UndoEdit(); return FReply::Handled(); })
+				]
+
+				+ SHorizontalBox::Slot()
+				.AutoWidth()
+				.Padding(4.0f, 0.0f, 0.0f, 0.0f)
+				[
+					SNew(SButton)
+					.Text(LOCTEXT("RevertEdits", "Revert all edits"))
+					.ToolTipText(LOCTEXT("RevertEditsTip", "Drop every edit by hand: the result goes back to what your choices make"))
+					.OnClicked_Lambda([this]() { bConfirmingRevert = true; return FReply::Handled(); })
+				]
+			]
+
+			// Reverting can't be undone: ask once more.
+			+ SHorizontalBox::Slot()
+			.AutoWidth()
+			.VAlign(VAlign_Center)
+			.Padding(8.0f, 0.0f, 0.0f, 0.0f)
+			[
+				SNew(SHorizontalBox)
+				.Visibility_Lambda([this]() { return HasEdits() && bConfirmingRevert ? EVisibility::Visible : EVisibility::Collapsed; })
+
+				+ SHorizontalBox::Slot()
+				.AutoWidth()
+				[
+					SNew(SButton)
+					.Text(LOCTEXT("RevertYes", "Revert all edits"))
+					.OnClicked_Lambda([this]() { RevertEdits(); return FReply::Handled(); })
+				]
+
+				+ SHorizontalBox::Slot()
+				.AutoWidth()
+				.Padding(4.0f, 0.0f, 0.0f, 0.0f)
+				[
+					SNew(SButton)
+					.Text(LOCTEXT("RevertNo", "Keep my edits"))
+					.OnClicked_Lambda([this]() { bConfirmingRevert = false; return FReply::Handled(); })
+				]
+			]
+		];
 }
 
 const SGitBlueprintMergeWindow::FRow* SGitBlueprintMergeWindow::GetSelectedRow() const
@@ -1768,6 +2606,8 @@ bool SGitBlueprintMergeWindow::Takes(int32 Group, EResolution Side) const
 
 FText SGitBlueprintMergeWindow::GetPreviewStatus() const
 {
+	if (HasEdits() && !bEditsConfirmed)
+		return LOCTEXT("PreviewEdited", "Edited by hand: confirm your edits to check it");
 	if (!Session->GetPreviewProblems().IsEmpty())
 		return LOCTEXT("PreviewBroken", "Won't merge as is (hover for why)");
 
@@ -1828,6 +2668,8 @@ FText SGitBlueprintMergeWindow::GetProgressText() const
 {
 	if (CanMerge())
 		return FText::Format(LOCTEXT("AllDecided", "All {0} conflict(s) decided. Press Merge."), NumGroups());
+	if (AllDecided() && HasEdits() && !bEditsConfirmed)
+		return FText::Format(LOCTEXT("AllDecidedEdits", "All {0} conflict(s) decided. Confirm your edits to the result, then press Merge."), NumGroups());
 	if (AllDecided())
 		return FText::Format(LOCTEXT("AllDecidedLeaveOut", "All {0} conflict(s) decided. To merge, tick \"Leave out\" next to the Merge button."), NumGroups());
 	return FText::Format(LOCTEXT("Decided", "{0} of {1} conflict(s) decided"), Choices.Num(), NumGroups());
@@ -1840,7 +2682,7 @@ bool SGitBlueprintMergeWindow::AllDecided() const
 
 bool SGitBlueprintMergeWindow::CanMerge() const
 {
-	return AllDecided() && (!bNeedsLeaveOut || bLeaveOut);
+	return AllDecided() && (!bNeedsLeaveOut || bLeaveOut) && (!HasEdits() || bEditsConfirmed) && !bConfirmingDiscard;
 }
 
 FReply SGitBlueprintMergeWindow::OnMerge()
@@ -1849,7 +2691,12 @@ FReply SGitBlueprintMergeWindow::OnMerge()
 		return FReply::Handled();
 
 	bConfirmingClose = false;
-	if (Session->Merge(Choices, OutputFile, PackageName, bNeedsLeaveOut && bLeaveOut))
+	bInternalChange = true;
+	const bool bMerged = HasEdits()
+		? Session->MergeEdited(Choices, OutputFile, PackageName, bNeedsLeaveOut && bLeaveOut)
+		: Session->Merge(Choices, OutputFile, PackageName, bNeedsLeaveOut && bLeaveOut);
+	bInternalChange = false;
+	if (bMerged)
 	{
 		bFinished = true;
 		OnDone.ExecuteIfBound();
@@ -1874,7 +2721,7 @@ FReply SGitBlueprintMergeWindow::OnCancel()
 
 bool SGitBlueprintMergeWindow::ConfirmClose()
 {
-	if (bFinished || Choices.Num() == 0)
+	if (bFinished || (Choices.Num() == 0 && !HasEdits()))
 		return true;
 
 	bConfirmingClose = true;

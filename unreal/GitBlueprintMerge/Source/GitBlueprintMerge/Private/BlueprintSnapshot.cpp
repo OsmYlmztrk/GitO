@@ -2,6 +2,8 @@
 
 #include "BlueprintSnapshot.h"
 
+#include "Components/PanelWidget.h"
+#include "Components/Widget.h"
 #include "EdGraph/EdGraph.h"
 #include "EdGraph/EdGraphNode.h"
 #include "EdGraph/EdGraphPin.h"
@@ -9,9 +11,11 @@
 #include "Engine/Blueprint.h"
 #include "Engine/SCS_Node.h"
 #include "Engine/SimpleConstructionScript.h"
+#include "K2Node_FunctionTerminator.h"
 #include "K2Node_Variable.h"
 #include "Misc/PackageName.h"
 #include "UObject/Package.h"
+#include "UObject/UObjectHash.h"
 #include "UObject/UnrealType.h"
 
 namespace GitBlueprintMerge
@@ -89,6 +93,213 @@ namespace GitBlueprintMerge
 			}
 		}
 
+		bool IsSkipped(const FProperty* Property)
+		{
+			return Property->HasAnyPropertyFlags(CPF_Transient | CPF_Deprecated);
+		}
+
+		/** Values that can't be copied as text: instanced objects (the copy would point at theirs' object). */
+		bool HoldsInstancedObjects(const FProperty* Property)
+		{
+			return Property->HasAnyPropertyFlags(CPF_InstancedReference | CPF_ContainsInstancedReference | CPF_PersistentInstance);
+		}
+
+		/** Every element of a fixed-size array, otherwise the one value. */
+		FString ExportValue(const FProperty* Property, const void* Container)
+		{
+			FString Text;
+			for (int32 Index = 0; Index < Property->ArrayDim; ++Index)
+			{
+				if (Index > 0)
+					Text += TEXT(",");
+				Property->ExportTextItem_Direct(Text, Property->ContainerPtrToValuePtr<void>(Container, Index), nullptr, nullptr, PPF_None);
+			}
+			return Text;
+		}
+
+		/**
+		 * Class Settings of the Blueprint ("bp/<property>"), merged by copying the value. A Widget or Anim Blueprint's
+		 * own data (widget tree, animations, bindings, groups, ...) is compared too but can't be merged yet.
+		 * Values Unreal works out itself when compiling (searchable in the asset registry, not editable) are left out.
+		 */
+		void AddBlueprintSettings(FSnapshot& Snap, const UBlueprint* Blueprint, const FNormalizer& Normalize)
+		{
+			for (TFieldIterator<FProperty> It(Blueprint->GetClass()); It; ++It)
+			{
+				const FProperty* Property = *It;
+				const UClass* Owner = Property->GetOwnerClass();
+				const bool bOwnData = Owner != UBlueprint::StaticClass() && Owner->IsChildOf(UBlueprint::StaticClass());
+				const bool bEditable = Property->HasAnyPropertyFlags(CPF_Edit);
+				if (IsSkipped(Property) || Property->GetFName() == TEXT("ParentClass") || Property->GetFName() == TEXT("WidgetVariableNameToGuidMap") || (!bEditable && (!bOwnData || Property->HasAnyPropertyFlags(CPF_AssetRegistrySearchable))))
+					continue;
+
+				const FString Key = TEXT("bp/") + Property->GetName();
+				Snap.Facts.Add(Key, Normalize(ExportValue(Property, Blueprint)));
+				Snap.Labels.Add(Key, Property->GetDisplayNameText().ToString());
+				if (!bEditable || Property->ArrayDim > 1 || HoldsInstancedObjects(Property))
+					Snap.Unmergeable.Add(Key);
+			}
+		}
+
+		/**
+		 * Widget and slot settings that can be copied from theirs as text. Not: instanced objects, function bindings
+		 * (delegates), the widget's link to its slot.
+		 */
+		bool IsCopyableWidgetProperty(const FProperty* Property)
+		{
+			return Property->ArrayDim == 1 && !HoldsInstancedObjects(Property) && !Property->IsA<FDelegateProperty>() &&
+				!Property->IsA<FMulticastDelegateProperty>() && Property->GetFName() != TEXT("Slot");
+		}
+
+		/** Editor-only view state that changes by just looking at an asset. */
+		bool IsViewState(const FProperty* Property)
+		{
+			static const FName Names[] = {TEXT("bExpandedInDesigner"), TEXT("EditorData")};
+			for (const FName& Name : Names)
+			{
+				if (Property->GetFName() == Name)
+					return true;
+			}
+			return false;
+		}
+
+		bool IsClassNamed(const UClass* Class, const TCHAR* Name)
+		{
+			for (; Class; Class = Class->GetSuperClass())
+			{
+				if (Class->GetFName() == Name)
+					return true;
+			}
+			return false;
+		}
+
+		/**
+		 * True for objects the snapshot already covers (graphs and their nodes, the components) or that the compiler
+		 * makes (Anim Blueprint extensions).
+		 */
+		bool IsCovered(const UObject* Object, const UBlueprint* Blueprint)
+		{
+			for (const UObject* Current = Object; Current && Current != Blueprint; Current = Current->GetOuter())
+			{
+				if (Current->IsA<UEdGraph>() || Current->IsA<UEdGraphNode>() || Current->IsA<USimpleConstructionScript>() || Current->IsA<USCS_Node>() ||
+					IsClassNamed(Current->GetClass(), TEXT("AnimBlueprintExtension")))
+					return true;
+			}
+			return false;
+		}
+
+		/**
+		 * Everything else the Blueprint owns ("inner/<path>", "inner/<path>/<property>"): the widget tree and widget
+		 * animations of a Widget Blueprint, inherited component overrides, ... Compared so theirs' changes there are
+		 * listed instead of lost, but not merged yet.
+		 */
+		void AddInnerObjects(FSnapshot& Snap, const UBlueprint* Blueprint, const FNormalizer& Normalize)
+		{
+			TArray<UObject*> Inner;
+			GetObjectsWithOuter(Blueprint, Inner, EGetObjectsFlags::IncludeNestedObjects);
+			for (const UObject* Object : Inner)
+			{
+				if (Object->HasAnyFlags(RF_Transient) || IsCovered(Object, Blueprint))
+					continue;
+
+				// A panel slot is where its widget sits (anchors, padding, ...): shown as "Slot ..." settings of
+				// that widget, so adding a widget is one change and not three.
+				const bool bSlot = IsClassNamed(Object->GetClass(), TEXT("PanelSlot"));
+				const FObjectProperty* ContentProperty = bSlot ? FindFProperty<FObjectProperty>(Object->GetClass(), TEXT("Content")) : nullptr;
+				const UObject* Content = ContentProperty ? ContentProperty->GetObjectPropertyValue_InContainer(Object) : nullptr;
+				const bool bSlotOfWidget = Content && Content->IsIn(Blueprint);
+
+				const FString Key = TEXT("inner/") + (bSlotOfWidget ? Content : Object)->GetPathName(Blueprint);
+				const FString Prefix = bSlotOfWidget ? TEXT("Slot.") : TEXT("");
+				const UWidget* Widget = Cast<UWidget>(Object);
+				if (!bSlotOfWidget)
+				{
+					Snap.Facts.Add(Key, Object->GetClass()->GetPathName());
+					Snap.Labels.Add(Key, TEXT("'") + Object->GetName() + TEXT("' (") + Object->GetClass()->GetDisplayNameText().ToString() + TEXT(")"));
+					if (Widget)
+					{
+						const UPanelWidget* Parent = Widget->GetParent();
+						Snap.WidgetParents.Add(Key, Parent && Parent->IsIn(Blueprint) ? TEXT("inner/") + Parent->GetPathName(Blueprint) : FString());
+					}
+					else
+					{
+						Snap.Unmergeable.Add(Key);
+					}
+				}
+
+				for (TFieldIterator<FProperty> It(Object->GetClass()); It; ++It)
+				{
+					// A panel's slot list and a slot's links back to its panel and widget follow the tree itself.
+					const bool bTreeLink = (bSlotOfWidget && (It->GetFName() == TEXT("Content") || It->GetFName() == TEXT("Parent")))
+						|| (It->GetFName() == TEXT("Slots") && IsClassNamed(Object->GetClass(), TEXT("PanelWidget")));
+					if (IsSkipped(*It) || IsViewState(*It) || bTreeLink)
+						continue;
+
+					const FString PropertyKey = Key + TEXT("/") + Prefix + It->GetName();
+					Snap.Facts.Add(PropertyKey, Normalize(ExportValue(*It, Object)));
+					Snap.Labels.Add(PropertyKey, (bSlotOfWidget ? TEXT("Slot ") : TEXT("")) + It->GetDisplayNameText().ToString());
+					if (!((Widget || bSlotOfWidget) && IsCopyableWidgetProperty(*It)))
+						Snap.Unmergeable.Add(PropertyKey);
+				}
+			}
+		}
+
+		/**
+		 * A node's own settings from the details panel ("node/<node>/prop/<property>[.<field>]"), e.g. the settings of
+		 * an Anim Graph node or a state transition. Struct settings are split into fields; fields shown as pins are
+		 * left to the pin facts.
+		 */
+		void AddNodeSettings(FSnapshot& Snap, const FString& NodeKey, const UEdGraphNode* Node, const FNormalizer& Normalize)
+		{
+			// Function entry/result nodes are synced as a whole.
+			if (Node->IsA<UK2Node_FunctionTerminator>())
+				return;
+
+			auto Add = [&](const FString& Path, const FString& Label, const FProperty* Property, const void* Container, bool bMergeable = true)
+			{
+				const FString Key = NodeKey + TEXT("/prop/") + Path;
+				Snap.Facts.Add(Key, Normalize(ExportValue(Property, Container)));
+				Snap.Labels.Add(Key, Label);
+				if (!bMergeable || Property->ArrayDim > 1 || HoldsInstancedObjects(Property))
+					Snap.Unmergeable.Add(Key);
+			};
+
+			for (TFieldIterator<FProperty> It(Node->GetClass()); It; ++It)
+			{
+				const FProperty* Property = *It;
+				if (!Property->HasAnyPropertyFlags(CPF_Edit) || IsSkipped(Property) || Property->GetOwnerClass() == UEdGraphNode::StaticClass() || Node->FindPin(Property->GetFName()))
+					continue;
+
+				// Instanced subobjects of a node (e.g. an Anim Graph node's property bindings): compared by content.
+				const FObjectProperty* ObjectProperty = CastField<FObjectProperty>(Property);
+				const UObject* Subobject = ObjectProperty && Property->ArrayDim == 1 && HoldsInstancedObjects(Property) ? ObjectProperty->GetObjectPropertyValue_InContainer(Node) : nullptr;
+				if (Subobject)
+				{
+					for (TFieldIterator<FProperty> Field(Subobject->GetClass()); Field; ++Field)
+					{
+						if (!IsSkipped(*Field))
+							Add(Property->GetName() + TEXT(".") + Field->GetName(), Property->GetDisplayNameText().ToString() + TEXT(": ") + Field->GetDisplayNameText().ToString(), *Field, Subobject, false);
+					}
+					continue;
+				}
+
+				const FStructProperty* StructProperty = CastField<FStructProperty>(Property);
+				const bool bSplit = StructProperty && Property->ArrayDim == 1 && !(StructProperty->Struct->StructFlags & (STRUCT_ImportTextItemNative | STRUCT_ExportTextItemNative));
+				if (!bSplit)
+				{
+					Add(Property->GetName(), Property->GetDisplayNameText().ToString(), Property, Node);
+					continue;
+				}
+
+				const void* Value = Property->ContainerPtrToValuePtr<void>(Node);
+				for (TFieldIterator<FProperty> Field(StructProperty->Struct); Field; ++Field)
+				{
+					if (Field->HasAnyPropertyFlags(CPF_Edit) && !IsSkipped(*Field) && !Node->FindPin(Field->GetFName()))
+						Add(Property->GetName() + TEXT(".") + Field->GetName(), Field->GetDisplayNameText().ToString(), *Field, Value);
+				}
+			}
+		}
+
 		TOptional<FString> FindFact(const FSnapshot& Snap, const FString& Key)
 		{
 			const FString* Value = Snap.Facts.Find(Key);
@@ -119,7 +330,7 @@ namespace GitBlueprintMerge
 				return Owners;
 			}
 
-			for (const TCHAR* Prefix : {TEXT("node/"), TEXT("var/"), TEXT("component/"), TEXT("row/")})
+			for (const TCHAR* Prefix : {TEXT("node/"), TEXT("var/"), TEXT("component/"), TEXT("row/"), TEXT("inner/")})
 			{
 				if (Key.StartsWith(Prefix))
 				{
@@ -135,7 +346,7 @@ namespace GitBlueprintMerge
 
 		bool IsEntityKey(const FString& Key)
 		{
-			return (Key.StartsWith(TEXT("node/")) || Key.StartsWith(TEXT("var/")) || Key.StartsWith(TEXT("component/")) || Key.StartsWith(TEXT("row/")))
+			return (Key.StartsWith(TEXT("node/")) || Key.StartsWith(TEXT("var/")) || Key.StartsWith(TEXT("component/")) || Key.StartsWith(TEXT("row/")) || Key.StartsWith(TEXT("inner/")))
 				&& OwnersOf(Key).Num() == 0;
 		}
 
@@ -181,6 +392,50 @@ namespace GitBlueprintMerge
 				{
 					Out += Text.Mid(Start, Index - Start);
 				}
+			}
+			return Out;
+		}
+
+		/** NSLOCTEXT("", "<key>", "Hello") -> Hello: the key changes with every edit and means nothing to people. */
+		FString ReadableText(const FString& Value)
+		{
+			if (!Value.StartsWith(TEXT("NSLOCTEXT(")) || !Value.EndsWith(TEXT("\")")))
+				return Value;
+
+			int32 Found = 0;
+			for (int32 Index = 0; Index + 4 <= Value.Len(); ++Index)
+			{
+				if (Value.Mid(Index, 4) == TEXT("\", \"") && ++Found == 2)
+					return Value.Mid(Index + 4, Value.Len() - 2 - (Index + 4));
+			}
+			return Value;
+		}
+
+		/**
+		 * "/Script/UMG.CanvasPanelSlot'<self>.WBP_Menu:WidgetTree.Root.CanvasPanelSlot_0'" -> "CanvasPanelSlot_0":
+		 * references to objects inside the asset, by name.
+		 */
+		FString ShortObjectNames(const FString& Value)
+		{
+			FString Out = Value;
+			for (int32 Quote = Out.Find(TEXT("'<self>.")); Quote != INDEX_NONE; Quote = Out.Find(TEXT("'<self>.")))
+			{
+				const int32 End = Out.Find(TEXT("'"), ESearchCase::CaseSensitive, ESearchDir::FromStart, Quote + 1);
+				if (End == INDEX_NONE)
+					break;
+
+				int32 Start = Quote;
+				while (Start > 0 && !FChar::IsWhitespace(Out[Start - 1]) && FCString::Strchr(TEXT("\"(,="), Out[Start - 1]) == nullptr)
+					--Start;
+
+				const FString Path = Out.Mid(Quote + 1, End - Quote - 1);
+				int32 Cut = INDEX_NONE;
+				for (int32 Index = Path.Len() - 1; Index >= 0 && Cut == INDEX_NONE; --Index)
+				{
+					if (Path[Index] == TEXT('.') || Path[Index] == TEXT(':'))
+						Cut = Index;
+				}
+				Out = Out.Left(Start) + Path.Mid(Cut + 1) + Out.Mid(End + 1);
 			}
 			return Out;
 		}
@@ -234,6 +489,9 @@ namespace GitBlueprintMerge
 			}
 		}
 
+		AddBlueprintSettings(Snap, Blueprint, Normalize);
+		AddInnerObjects(Snap, Blueprint, Normalize);
+
 		if (Blueprint->GeneratedClass)
 		{
 			if (const UObject* CDO = Blueprint->GeneratedClass->GetDefaultObject(false))
@@ -276,6 +534,7 @@ namespace GitBlueprintMerge
 				Snap.Facts.Add(Key + TEXT("/pos"), FString::Printf(TEXT("%d,%d"), Node->NodePosX, Node->NodePosY));
 				Snap.Facts.Add(Key + TEXT("/comment"), Node->NodeComment);
 				Snap.Facts.Add(Key + TEXT("/enabled"), FString::FromInt(static_cast<int32>(Node->GetDesiredEnabledState())));
+				AddNodeSettings(Snap, Key, Node, Normalize);
 				// First line of the full title reads best ("Print String", not "PrintString").
 				const FString FullTitle = Node->GetNodeTitle(ENodeTitleType::FullTitle).ToString();
 				FString Title = FullTitle;
@@ -1024,6 +1283,26 @@ namespace GitBlueprintMerge
 		if (Key == TEXT("parent") || Key.StartsWith(TEXT("interface/")) || Ours.Unmergeable.Contains(Key) || Theirs.Unmergeable.Contains(Key))
 			return true;
 
+		// Widgets theirs added go into a panel ours has (or one theirs adds along with them). Removing, replacing or
+		// restoring one is not supported yet.
+		if (Key.StartsWith(TEXT("inner/")) && IsEntityKey(Key))
+		{
+			if (Decision.Base.IsSet() || Decision.Ours.IsSet() || !Decision.Theirs.IsSet())
+				return true;
+
+			FString Current = Key;
+			for (int32 Depth = 0; Depth < 100; ++Depth)
+			{
+				const FString* Parent = Theirs.WidgetParents.Find(Current);
+				if (!Parent || Parent->IsEmpty())
+					return true;
+				if (Ours.Facts.Contains(*Parent))
+					return false;
+				Current = *Parent;
+			}
+			return true;
+		}
+
 		// Function graphs can be added, removed and renamed; other kinds of graphs not yet.
 		if (Key.StartsWith(TEXT("graph/")))
 			return VariableField(Decision.Theirs.IsSet() ? Decision.Theirs : Decision.Base, 1) != TEXT("function");
@@ -1209,7 +1488,7 @@ namespace GitBlueprintMerge
 				if (Key.StartsWith(TEXT("graph/")))
 					return TEXT("\"") + VariableField(InValue, 0) + TEXT("\"");
 
-				return TEXT("\"") + TrimZeros(Shorten(InValue).Mid(1).LeftChop(1)) + TEXT("\"");
+				return TEXT("\"") + TrimZeros(Shorten(ShortObjectNames(ReadableText(*InValue))).Mid(1).LeftChop(1)) + TEXT("\"");
 			}
 
 			/** The thing a fact is about, e.g. "In String of 'Print String' (EventGraph)". */
@@ -1237,6 +1516,8 @@ namespace GitBlueprintMerge
 						return TEXT("Comment of ") + Label(Id);
 					if (Detail == TEXT("enabled"))
 						return TEXT("Enabled state of ") + Label(Id);
+					if (Detail.StartsWith(TEXT("prop/")))
+						return TEXT("Setting '") + Label(Key) + TEXT("' of ") + Label(Id);
 					return TEXT("Setup of ") + Label(Id);
 				}
 
@@ -1265,6 +1546,13 @@ namespace GitBlueprintMerge
 					return Detail.IsEmpty()
 						? TEXT("Row '") + Label(Key) + TEXT("'")
 						: TEXT("'") + Label(Key) + TEXT("' of row '") + Label(TEXT("row/") + Id) + TEXT("'");
+				}
+				if (Key.StartsWith(TEXT("bp/")))
+					return TEXT("Class setting '") + Label(Key) + TEXT("'");
+				if (Key.StartsWith(TEXT("inner/")))
+				{
+					SplitEntity(Key, Id, Detail);
+					return Detail.IsEmpty() ? Label(Key) : TEXT("'") + Label(Key) + TEXT("' of ") + Label(TEXT("inner/") + Id);
 				}
 				if (Label(Key) != Key)
 					return Label(Key);
@@ -1306,6 +1594,8 @@ namespace GitBlueprintMerge
 						return TEXT("comment ") + Value(Decision.Key, NewValue);
 					if (Detail == TEXT("enabled"))
 						return TEXT("set to ") + Value(Decision.Key, NewValue);
+					if (Detail.StartsWith(TEXT("prop/")))
+						return Label(Decision.Key) + TEXT(" = ") + Value(Decision.Key, NewValue);
 					return TEXT("setup changed");
 				}
 
@@ -1378,7 +1668,7 @@ namespace GitBlueprintMerge
 		}
 		if (Key.StartsWith(TEXT("component/")) && IsEntityKey(Key))
 			return FPackageName::ObjectPathToObjectName(VariableField(Value, 1));
-		if (Key.StartsWith(TEXT("graph/")) || Key.StartsWith(TEXT("interface/")) || (Key.StartsWith(TEXT("row/")) && IsEntityKey(Key)))
+		if (Key.StartsWith(TEXT("graph/")) || Key.StartsWith(TEXT("interface/")) || ((Key.StartsWith(TEXT("row/")) || Key.StartsWith(TEXT("inner/"))) && IsEntityKey(Key)))
 			return TEXT("Present");
 
 		return FNamer{Base, Ours, Theirs}.Value(Key, Value);

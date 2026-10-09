@@ -5,6 +5,7 @@
 #include "BlueprintSnapshot.h"
 
 class UBlueprint;
+class UEdGraphNode;
 
 namespace GitBlueprintMerge
 {
@@ -16,4 +17,15 @@ namespace GitBlueprintMerge
 	 * compile. Ours may be partially modified then and must not be saved.
 	 */
 	bool ApplyTheirs(const FMergePlan& Plan, UBlueprint* Ours, UBlueprint* Theirs, TArray<FString>& OutProblems);
+
+	/** Compiles a merged Blueprint; false with the compile errors in OutProblems when it doesn't compile. */
+	bool CompileMerged(UBlueprint* Blueprint, TArray<FString>& OutProblems);
+
+	/**
+	 * Copies Nodes (from Source, another revision) into the same graphs of Target, with references to Source's
+	 * package pointed at Target's. Nodes Target already has get a new id. Wires to nodes outside the copy are dropped.
+	 * With DropAt (graph coordinates), the copies are moved so their top-left corner lands there.
+	 * Returns the copies; OutProblem says why some couldn't be copied (e.g. their graph isn't in Target).
+	 */
+	TArray<UEdGraphNode*> CopyNodes(const TArray<UEdGraphNode*>& Nodes, UBlueprint* Source, UBlueprint* Target, FString& OutProblem, const FVector2D* DropAt = nullptr);
 }

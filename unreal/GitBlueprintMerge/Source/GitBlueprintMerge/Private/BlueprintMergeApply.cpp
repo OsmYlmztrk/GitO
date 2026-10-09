@@ -2,6 +2,9 @@
 
 #include "BlueprintMergeApply.h"
 
+#include "Blueprint/WidgetTree.h"
+#include "Components/PanelSlot.h"
+#include "Components/PanelWidget.h"
 #include "EdGraph/EdGraph.h"
 #include "EdGraph/EdGraphNode.h"
 #include "EdGraph/EdGraphPin.h"
@@ -18,6 +21,7 @@
 #include "Logging/TokenizedMessage.h"
 #include "Misc/PackageName.h"
 #include "UObject/Package.h"
+#include "UObject/UObjectHash.h"
 #include "UObject/UnrealType.h"
 
 namespace GitBlueprintMerge
@@ -165,6 +169,90 @@ namespace GitBlueprintMerge
 			Mine->NodePosY = Their->NodePosY;
 			Mine->ReconstructNode();
 		}
+
+		/** Objects a Blueprint owns, by path below it ("WidgetTree.Title"), as the snapshot's "inner/" keys use them. */
+		TMap<FString, UObject*> InnerObjects(const UBlueprint* Blueprint)
+		{
+			TMap<FString, UObject*> Objects;
+			TArray<UObject*> Inner;
+			GetObjectsWithOuter(Blueprint, Inner, EGetObjectsFlags::IncludeNestedObjects);
+			for (UObject* Object : Inner)
+				Objects.Add(Object->GetPathName(Blueprint), Object);
+			return Objects;
+		}
+
+		/** Copies every setting of Their onto Mine (same class) except Skip, for a widget or slot theirs added. */
+		bool CopyAllSettings(UObject* Mine, const UObject* Their, std::initializer_list<FName> Skip, const FRetarget& Retarget)
+		{
+			bool bOk = true;
+			for (TFieldIterator<FProperty> It(Their->GetClass()); It; ++It)
+			{
+				const FProperty* Property = *It;
+				if (Property->HasAnyPropertyFlags(CPF_Transient | CPF_Deprecated) || Property->ArrayDim != 1 ||
+					Property->HasAnyPropertyFlags(CPF_InstancedReference | CPF_ContainsInstancedReference | CPF_PersistentInstance) ||
+					Property->IsA<FDelegateProperty>() || Property->IsA<FMulticastDelegateProperty>())
+					continue;
+
+				bool bSkipped = false;
+				for (const FName& Name : Skip)
+					bSkipped |= Property->GetFName() == Name;
+				if (bSkipped)
+					continue;
+
+				// Straight into memory: setters (e.g. SetCursor) would also flip their override flags.
+				FString Text;
+				Property->ExportTextItem_Direct(Text, Property->ContainerPtrToValuePtr<void>(Their), nullptr, nullptr, PPF_None);
+				bOk &= Property->ImportText_Direct(*Retarget(Text), Property->ContainerPtrToValuePtr<void>(Mine), Mine, PPF_None) != nullptr;
+			}
+			return bOk;
+		}
+
+		/** Gives a widget theirs added the variable guid theirs gave it (the designer keeps one per widget). */
+		void CopyWidgetGuid(UBlueprint* Ours, const UBlueprint* Theirs, FName Name)
+		{
+			const FMapProperty* Property = FindFProperty<FMapProperty>(Ours->GetClass(), TEXT("WidgetVariableNameToGuidMap"));
+			if (!Property || Property->KeyProp->GetClass() != FNameProperty::StaticClass())
+				return;
+
+			FScriptMapHelper TheirMap(Property, Property->ContainerPtrToValuePtr<void>(Theirs));
+			const int32 Index = TheirMap.FindMapIndexWithKey(&Name);
+			if (Index == INDEX_NONE)
+				return;
+
+			FScriptMapHelper MyMap(Property, Property->ContainerPtrToValuePtr<void>(Ours));
+			MyMap.AddPair(&Name, TheirMap.GetValuePtr(Index));
+		}
+
+		/** Copies one value from Their to Mine through text; Path is "<property>" or "<struct property>.<field>". */
+		bool CopySetting(UObject* Mine, const UObject* Their, const FString& Path, const FRetarget& Retarget)
+		{
+			FString Name = Path, Field;
+			Path.Split(TEXT("."), &Name, &Field);
+
+			const FProperty* MyProperty = FindFProperty<FProperty>(Mine->GetClass(), FName(*Name));
+			const FProperty* TheirProperty = FindFProperty<FProperty>(Their->GetClass(), FName(*Name));
+			if (!MyProperty || !TheirProperty || MyProperty->ArrayDim != 1)
+				return false;
+
+			void* MyValue = MyProperty->ContainerPtrToValuePtr<void>(Mine);
+			const void* TheirValue = TheirProperty->ContainerPtrToValuePtr<void>(Their);
+			if (!Field.IsEmpty())
+			{
+				const FStructProperty* MyStruct = CastField<FStructProperty>(MyProperty);
+				const FStructProperty* TheirStruct = CastField<FStructProperty>(TheirProperty);
+				MyProperty = MyStruct ? FindFProperty<FProperty>(MyStruct->Struct, FName(*Field)) : nullptr;
+				TheirProperty = TheirStruct ? FindFProperty<FProperty>(TheirStruct->Struct, FName(*Field)) : nullptr;
+				if (!MyProperty || !TheirProperty || MyProperty->ArrayDim != 1)
+					return false;
+				MyValue = MyProperty->ContainerPtrToValuePtr<void>(MyValue);
+				TheirValue = TheirProperty->ContainerPtrToValuePtr<void>(TheirValue);
+			}
+
+			FString Text;
+			TheirProperty->ExportTextItem_Direct(Text, TheirValue, nullptr, nullptr, PPF_None);
+			Mine->Modify();
+			return MyProperty->ImportText_Direct(*Retarget(Text), MyValue, Mine, PPF_None) != nullptr;
+		}
 	}
 
 	bool ApplyTheirs(const FMergePlan& Plan, UBlueprint* Ours, UBlueprint* Theirs, TArray<FString>& OutProblems)
@@ -184,7 +272,7 @@ namespace GitBlueprintMerge
 
 		// 1. Sort what we take from theirs into work lists.
 		TArray<FString> NodesToAdd, NodesToRemove, NodesToReplace;
-		TArray<const FDecision*> NodeEdits, PinEdits, VariableChanges, ClassDefaults, GraphChanges, ComponentEdits;
+		TArray<const FDecision*> NodeEdits, PinEdits, VariableChanges, ClassDefaults, GraphChanges, ComponentEdits, ClassSettings, WidgetsToAdd, WidgetEdits;
 
 		for (const FDecision& Decision : Plan.Decisions)
 		{
@@ -235,6 +323,14 @@ namespace GitBlueprintMerge
 			else if (Key.StartsWith(TEXT("component/")) && Key.Contains(TEXT("/prop/")))
 			{
 				ComponentEdits.Add(&Decision);
+			}
+			else if (Key.StartsWith(TEXT("bp/")))
+			{
+				ClassSettings.Add(&Decision);
+			}
+			else if (Key.StartsWith(TEXT("inner/")))
+			{
+				(Key.Mid(6).Contains(TEXT("/")) ? WidgetEdits : WidgetsToAdd).Add(&Decision);
 			}
 			else
 			{
@@ -439,6 +535,7 @@ namespace GitBlueprintMerge
 		}
 
 		// 5. Small edits on nodes both sides kept.
+		TSet<UEdGraphNode*> NodesToReconstruct;
 		for (const FDecision* Decision : NodeEdits)
 		{
 			FString Id, Detail;
@@ -469,6 +566,105 @@ namespace GitBlueprintMerge
 			{
 				(*Mine)->SetEnabledState((*Their)->GetDesiredEnabledState(), (*Their)->HasUserSetTheEnabledState());
 			}
+			else if (Detail.StartsWith(TEXT("prop/")))
+			{
+				if (CopySetting(*Mine, *Their, Detail.Mid(5), Retarget))
+					NodesToReconstruct.Add(*Mine);
+				else
+					OutProblems.Add(FString::Printf(TEXT("Could not apply %s."), *Decision->Key));
+			}
+		}
+
+		// Pins may depend on a node's settings.
+		for (UEdGraphNode* Node : NodesToReconstruct)
+			Node->ReconstructNode();
+
+		// 5a. Widgets theirs added, panels before what goes into them; then settings of widgets both sides have.
+		if (WidgetsToAdd.Num() > 0 || WidgetEdits.Num() > 0)
+		{
+			TMap<FString, UObject*> MyInner = InnerObjects(Ours);
+			const TMap<FString, UObject*> TheirInner = InnerObjects(Theirs);
+			UWidgetTree* MyTree = Cast<UWidgetTree>(MyInner.FindRef(TEXT("WidgetTree")));
+			TArray<const FDecision*> WidgetsInOrder;
+
+			// Widgets all sit directly in the tree, so a panel theirs added comes first only by taking it in rounds.
+			TArray<const FDecision*> Pending = WidgetsToAdd;
+			for (bool bProgress = true; bProgress && Pending.Num() > 0;)
+			{
+				bProgress = false;
+				for (int32 Index = 0; Index < Pending.Num(); ++Index)
+				{
+					const UWidget* Their = Cast<UWidget>(TheirInner.FindRef(Pending[Index]->Key.Mid(6)));
+					const UPanelWidget* TheirParent = Their ? Their->GetParent() : nullptr;
+					if (!TheirParent || MyInner.Contains(TheirParent->GetPathName(Theirs)))
+					{
+						WidgetsInOrder.Add(Pending[Index]);
+						Pending.RemoveAt(Index--);
+						bProgress = true;
+					}
+				}
+			}
+			WidgetsInOrder.Append(Pending);
+
+			for (const FDecision* Decision : WidgetsInOrder)
+			{
+				const FString Path = Decision->Key.Mid(6);
+				const UWidget* Their = Cast<UWidget>(TheirInner.FindRef(Path));
+				const UPanelWidget* TheirParent = Their ? Their->GetParent() : nullptr;
+				UPanelWidget* MyParent = TheirParent ? Cast<UPanelWidget>(MyInner.FindRef(TheirParent->GetPathName(Theirs))) : nullptr;
+				if (!MyTree || !Their || !MyParent || !Their->Slot)
+				{
+					OutProblems.Add(FString::Printf(TEXT("Could not add widget '%s' from theirs."), *Path));
+					continue;
+				}
+				if (MyTree->FindWidget(Their->GetFName()) || FBlueprintEditorUtils::FindNewVariableIndex(Ours, Their->GetFName()) != INDEX_NONE)
+				{
+					OutProblems.Add(FString::Printf(TEXT("Theirs added the widget '%s', but ours already has something with that name."), *Their->GetName()));
+					continue;
+				}
+
+				MyTree->Modify();
+				MyParent->Modify();
+				UWidget* Mine = NewObject<UWidget>(MyTree, Their->GetClass(), Their->GetFName(), RF_Transactional);
+				const bool bWidget = CopyAllSettings(Mine, Their, {TEXT("Slot"), TEXT("Slots")}, Retarget);
+				UPanelSlot* Slot = MyParent->InsertChildAt(FMath::Min(TheirParent->GetChildIndex(Their), MyParent->GetChildrenCount()), Mine);
+				const bool bSlot = Slot && CopyAllSettings(Slot, Their->Slot, {TEXT("Content"), TEXT("Parent")}, Retarget);
+				if (!bWidget || !bSlot)
+					OutProblems.Add(FString::Printf(TEXT("Could not copy all settings of widget '%s' from theirs."), *Their->GetName()));
+				if (Slot)
+					Slot->SynchronizeProperties();
+				CopyWidgetGuid(Ours, Theirs, Their->GetFName());
+				MyInner.Add(Path, Mine);
+			}
+
+			for (const FDecision* Decision : WidgetEdits)
+			{
+				// "inner/<path>/<property>" or "inner/<widget>/Slot.<property>"
+				FString Path, Property;
+				Decision->Key.Mid(6).Split(TEXT("/"), &Path, &Property, ESearchCase::CaseSensitive, ESearchDir::FromEnd);
+				UObject* Mine = MyInner.FindRef(Path);
+				const UObject* Their = TheirInner.FindRef(Path);
+				if (Property.RemoveFromStart(TEXT("Slot.")))
+				{
+					Mine = Cast<UWidget>(Mine) ? Cast<UWidget>(Mine)->Slot.Get() : nullptr;
+					Their = Cast<UWidget>(Their) ? Cast<UWidget>(Their)->Slot.Get() : nullptr;
+				}
+
+				if (!Mine || !Their || !CopySetting(Mine, Their, Property, Retarget))
+				{
+					OutProblems.Add(FString::Printf(TEXT("Could not set '%s' of '%s'."), *Property, *Path));
+					continue;
+				}
+				if (UPanelSlot* Slot = Cast<UPanelSlot>(Mine))
+					Slot->SynchronizeProperties();
+			}
+		}
+
+		// 5b. Class Settings.
+		for (const FDecision* Decision : ClassSettings)
+		{
+			if (!CopySetting(Ours, Theirs, Decision->Key.Mid(3), Retarget))
+				OutProblems.Add(FString::Printf(TEXT("Could not set class setting '%s'."), *Decision->Key.Mid(3)));
 		}
 
 		for (const FDecision* Decision : PinEdits)
@@ -559,20 +755,8 @@ namespace GitBlueprintMerge
 			return false;
 
 		// 7. Compile; a merge that doesn't compile is not a merge.
-		FBlueprintEditorUtils::MarkBlueprintAsStructurallyModified(Ours);
-		FCompilerResultsLog Results;
-		FKismetEditorUtilities::CompileBlueprint(Ours, EBlueprintCompileOptions::SkipGarbageCollection, &Results);
-		if (Results.NumErrors > 0 || Ours->Status == BS_Error)
-		{
-			for (const TSharedRef<FTokenizedMessage>& Message : Results.Messages)
-			{
-				if (Message->GetSeverity() == EMessageSeverity::Error)
-					OutProblems.Add(TEXT("Compile error: ") + Message->ToText().ToString());
-			}
-			if (OutProblems.Num() == 0)
-				OutProblems.Add(TEXT("The merged Blueprint does not compile."));
+		if (!CompileMerged(Ours, OutProblems))
 			return false;
-		}
 
 		// 8. Class defaults, after compiling so variables theirs added exist on the class.
 		UObject* MyDefaults = Ours->GeneratedClass ? Ours->GeneratedClass->GetDefaultObject() : nullptr;
@@ -595,5 +779,100 @@ namespace GitBlueprintMerge
 		}
 
 		return OutProblems.Num() == 0;
+	}
+
+	bool CompileMerged(UBlueprint* Blueprint, TArray<FString>& OutProblems)
+	{
+		FBlueprintEditorUtils::MarkBlueprintAsStructurallyModified(Blueprint);
+		FCompilerResultsLog Results;
+		FKismetEditorUtilities::CompileBlueprint(Blueprint, EBlueprintCompileOptions::SkipGarbageCollection, &Results);
+		if (Results.NumErrors == 0 && Blueprint->Status != BS_Error)
+			return true;
+
+		const int32 Before = OutProblems.Num();
+		for (const TSharedRef<FTokenizedMessage>& Message : Results.Messages)
+		{
+			if (Message->GetSeverity() == EMessageSeverity::Error)
+				OutProblems.Add(TEXT("Compile error: ") + Message->ToText().ToString());
+		}
+		if (OutProblems.Num() == Before)
+			OutProblems.Add(TEXT("The merged Blueprint does not compile."));
+		return false;
+	}
+
+	TArray<UEdGraphNode*> CopyNodes(const TArray<UEdGraphNode*>& Nodes, UBlueprint* Source, UBlueprint* Target, FString& OutProblem, const FVector2D* DropAt)
+	{
+		const FRetarget Retarget(Source, Target);
+		const TMap<FString, UEdGraphNode*> TargetNodes = NodesById(Target);
+
+		TMap<FString, UEdGraph*> TargetGraphs;
+		TArray<UEdGraph*> Graphs;
+		Target->GetAllGraphs(Graphs);
+		for (UEdGraph* Graph : Graphs)
+		{
+			if (Graph)
+				TargetGraphs.Add(GraphId(Graph), Graph);
+		}
+
+		// One paste per graph, so wires between the copied nodes are kept.
+		TMap<UEdGraph*, TSet<UObject*>> ByGraph;
+		for (UEdGraphNode* Node : Nodes)
+		{
+			UEdGraph* const* Graph = Node ? TargetGraphs.Find(GraphId(Node->GetGraph())) : nullptr;
+			if (!Graph)
+			{
+				OutProblem = TEXT("Some nodes are in a graph the result doesn't have; add that graph by hand first.");
+				continue;
+			}
+			if (!Node->CanDuplicateNode())
+			{
+				OutProblem = FString::Printf(TEXT("'%s' can't be copied."), *Node->GetNodeTitle(ENodeTitleType::ListView).ToString());
+				continue;
+			}
+			ByGraph.FindOrAdd(*Graph).Add(Node);
+		}
+
+		TArray<UEdGraphNode*> Copies;
+		for (const TPair<UEdGraph*, TSet<UObject*>>& Pair : ByGraph)
+		{
+			FString Text;
+			FEdGraphUtilities::ExportNodesToText(Pair.Value, Text);
+
+			Pair.Key->Modify();
+			TSet<UEdGraphNode*> Imported;
+			FEdGraphUtilities::ImportNodesFromText(Pair.Key, Retarget(Text), Imported);
+			for (UEdGraphNode* Node : Imported)
+			{
+				// Already in the result: this is a second copy, so it needs its own id and a spot of its own.
+				if (TargetNodes.Contains(Node->NodeGuid.ToString()))
+				{
+					Node->CreateNewGuid();
+					Node->NodePosX += 40;
+					Node->NodePosY += 40;
+				}
+				Copies.Add(Node);
+			}
+		}
+
+		// Dropped somewhere: keep the copies' layout, with their top-left corner where they were dropped.
+		if (DropAt && Copies.Num() > 0)
+		{
+			int32 MinX = TNumericLimits<int32>::Max();
+			int32 MinY = TNumericLimits<int32>::Max();
+			for (const UEdGraphNode* Node : Copies)
+			{
+				MinX = FMath::Min(MinX, Node->NodePosX);
+				MinY = FMath::Min(MinY, Node->NodePosY);
+			}
+			for (UEdGraphNode* Node : Copies)
+			{
+				Node->NodePosX += FMath::RoundToInt32(DropAt->X) - MinX;
+				Node->NodePosY += FMath::RoundToInt32(DropAt->Y) - MinY;
+			}
+		}
+
+		if (Copies.Num() > 0)
+			FBlueprintEditorUtils::MarkBlueprintAsStructurallyModified(Target);
+		return Copies;
 	}
 }

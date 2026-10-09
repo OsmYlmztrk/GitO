@@ -17,6 +17,10 @@ namespace SourceGit.Models
         [JsonPropertyName("written")]
         public bool Written { get; set; } = false;
 
+        /// <summary>The person edited the result by hand in the merge window and confirmed those edits.</summary>
+        [JsonPropertyName("editedByHand")]
+        public bool EditedByHand { get; set; } = false;
+
         [JsonPropertyName("summary")]
         public BlueprintMergeSummary Summary { get; set; } = new();
 
