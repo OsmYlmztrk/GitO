@@ -21,6 +21,7 @@ public class GitBlueprintMerge : ModuleRules
 			"InputCore",
 			"MainFrame",
 			"GraphEditor",
+			"Kismet",
 			"PropertyEditor",
 			"UMG",
 		});

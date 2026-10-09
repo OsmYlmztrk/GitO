@@ -2,6 +2,10 @@
 
 #include "SGitBlueprintMergeWindow.h"
 
+#include "BlueprintActionFilter.h"
+#include "BlueprintActionMenuBuilder.h"
+#include "BlueprintActionMenuItem.h"
+#include "BlueprintActionMenuUtils.h"
 #include "BlueprintMergeApply.h"
 #include "Brushes/SlateRoundedBoxBrush.h"
 #include "Components/PanelSlot.h"
@@ -23,6 +27,7 @@
 #include "IStructureDetailsView.h"
 #include "Kismet2/BlueprintEditorUtils.h"
 #include "MergeSession.h"
+#include "SGraphActionMenu.h"
 #include "Misc/ITransaction.h"
 #include "ScopedTransaction.h"
 #include "UObject/StructOnScope.h"
@@ -47,6 +52,8 @@
 #include "Widgets/Text/STextBlock.h"
 
 #define LOCTEXT_NAMESPACE "GitBlueprintMerge"
+
+DEFINE_LOG_CATEGORY_STATIC(LogGitBlueprintMergeWindow, Log, All);
 
 using namespace GitBlueprintMerge;
 
@@ -1592,6 +1599,7 @@ TSharedRef<SWidget> SGitBlueprintMergeWindow::MakeGraphView(EResolution Side, UB
 	if (bResult)
 	{
 		ResultNodeDetails = MakeObjectDetails(true);
+		Events.OnCreateActionMenuAtLocation = SGraphEditor::FOnCreateActionMenuAtLocation::CreateSP(this, &SGitBlueprintMergeWindow::OnCreateResultActionMenu);
 		Events.OnSelectionChanged = SGraphEditor::FOnSelectionChanged::CreateLambda([this](const FGraphPanelSelectionSet& Selection)
 		{
 			if (ResultNodeDetails.IsValid())
@@ -2153,6 +2161,61 @@ void SGitBlueprintMergeWindow::PasteFromClipboard()
 	CopyNodesToResult(ClipboardSource.Get(), Nodes, &At);
 }
 
+FActionMenuContent SGitBlueprintMergeWindow::OnCreateResultActionMenu(UEdGraph* Graph, const FVector2f& Location, const TArray<UEdGraphPin*>& Pins, bool bAutoExpand, SGraphEditor::FActionMenuClosed OnClosed)
+{
+	UBlueprint* Blueprint = Session->GetPreview();
+	const TSharedRef<SGraphActionMenu> Menu = SNew(SGraphActionMenu)
+		.GraphObj(Graph)
+		.DraggedFromPins(Pins)
+		.AutoExpandActionMenu(bAutoExpand)
+		.OnCollectAllActions_Lambda([Blueprint, Graph, Pins](FGraphActionListBuilderBase& OutActions)
+		{
+			if (!Blueprint)
+				return;
+
+			FBlueprintActionContext Context;
+			Context.Blueprints.Add(Blueprint);
+			Context.Graphs.Add(Graph);
+			Context.Pins = Pins;
+
+			FBlueprintActionMenuBuilder Builder;
+			FBlueprintActionMenuUtils::MakeContextMenu(Context, /*bIsContextSensitive=*/true, /*ClassTargetMask=*/0, Builder);
+
+			// Only actions that add a node; the others change the Blueprint itself.
+			for (int32 Index = 0; Index < Builder.GetNumActions(); ++Index)
+			{
+				const TSharedPtr<FEdGraphSchemaAction>& Action = Builder.GetSchemaAction(Index);
+				if (Action.IsValid() && Action->GetTypeId() == FBlueprintActionMenuItem::StaticGetTypeId())
+					OutActions.AddAction(Action);
+			}
+		})
+		.OnActionSelected_Lambda([this, Graph, Location, Pins, OnClosed](const TArray<TSharedPtr<FEdGraphSchemaAction>>& Actions, ESelectInfo::Type How)
+		{
+			if (How != ESelectInfo::OnMouseClick && How != ESelectInfo::OnKeyPress && !Actions.IsEmpty())
+				return;
+
+			if (!Actions.IsEmpty() && Actions[0].IsValid())
+			{
+				const FScopedTransaction Transaction(LOCTEXT("AddNodeTransaction", "Add a node to the merge result"));
+				Graph->Modify();
+				TArray<UEdGraphPin*> FromPins = Pins;
+				Actions[0]->PerformAction(Graph, FromPins, Location, /*bSelectNewNode=*/true);
+			}
+
+			FSlateApplication::Get().DismissAllMenus();
+			OnClosed.ExecuteIfBound();
+		});
+
+	return FActionMenuContent(
+		SNew(SBox)
+		.WidthOverride(420.0f)
+		.HeightOverride(480.0f)
+		[
+			Menu
+		],
+		Menu->GetFilterTextBox());
+}
+
 bool SGitBlueprintMergeWindow::OnGraphKeyDown(const FKeyEvent& InKeyEvent)
 {
 	// Typing in a pin value or a details field keeps its own Ctrl+C / Delete / Ctrl+Z.
@@ -2263,6 +2326,20 @@ void SGitBlueprintMergeWindow::CopyNodesToResult(UBlueprint* Source, const TArra
 		EditsMessage = Problem;
 	else if (Copies.IsEmpty())
 		EditsMessage = TEXT("Nothing was copied.");
+
+	// What landed, with its wires, so a copy can be checked in the log.
+	for (const UEdGraphNode* Copy : Copies)
+	{
+		for (const UEdGraphPin* Pin : Copy->Pins)
+		{
+			for (const UEdGraphPin* Linked : Pin->LinkedTo)
+			{
+				UE_LOG(LogGitBlueprintMergeWindow, Display, TEXT("Copied %s.%s is wired to %s.%s (%s)"), *Copy->GetName(), *Pin->PinName.ToString(),
+					*Linked->GetOwningNode()->GetName(), *Linked->PinName.ToString(), Copies.Contains(Linked->GetOwningNode()) ? TEXT("a copy") : TEXT("already there"));
+			}
+		}
+	}
+	UE_LOG(LogGitBlueprintMergeWindow, Display, TEXT("Copied %d of %d node(s) into the result."), Copies.Num(), Nodes.Num());
 
 	// Redraw the result graph with the copies in it, selected.
 	if (Result.IsValid())

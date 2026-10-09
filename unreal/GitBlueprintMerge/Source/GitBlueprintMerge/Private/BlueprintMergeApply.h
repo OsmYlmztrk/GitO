@@ -23,7 +23,8 @@ namespace GitBlueprintMerge
 
 	/**
 	 * Copies Nodes (from Source, another revision) into the same graphs of Target, with references to Source's
-	 * package pointed at Target's. Nodes Target already has get a new id. Wires to nodes outside the copy are dropped.
+	 * package pointed at Target's. Nodes Target already has get a new id. Wires between the copies are kept; wires to
+	 * nodes outside the copy are made again to the same nodes in Target, unless that would replace a wire already there.
 	 * With DropAt (graph coordinates), the copies are moved so their top-left corner lands there.
 	 * Returns the copies; OutProblem says why some couldn't be copied (e.g. their graph isn't in Target).
 	 */

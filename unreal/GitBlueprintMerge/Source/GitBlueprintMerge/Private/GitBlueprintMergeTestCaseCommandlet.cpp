@@ -28,6 +28,7 @@
 #include "Kismet2/BlueprintEditorUtils.h"
 #include "Kismet2/KismetEditorUtilities.h"
 #include "BlueprintMergeApply.h"
+#include "ScopedTransaction.h"
 #include "MergeSession.h"
 #include "Misc/Paths.h"
 #include "UObject/Package.h"
@@ -659,11 +660,29 @@ namespace
 		const int32 Before = Count(Ours.Blueprint);
 		FString Problem;
 		const FVector2D DropAt(1000.0, 500.0);
-		const TArray<UEdGraphNode*> Copies = CopyNodes(Nodes, Theirs.Blueprint, Ours.Blueprint, Problem, &DropAt);
+		TArray<UEdGraphNode*> Copies;
+		{
+			// As in the merge window: inside an undo transaction.
+			const FScopedTransaction Transaction(FText::FromString(TEXT("CopyCheck")));
+			Copies = CopyNodes(Nodes, Theirs.Blueprint, Ours.Blueprint, Problem, &DropAt);
+		}
 		UE_LOG(LogGitBlueprintMergeTestCase, Display, TEXT("COPY selected %d, copied %d, nodes %d -> %d, problem '%s'"), Nodes.Num(), Copies.Num(), Before, Count(Ours.Blueprint), *Problem);
 		for (const UEdGraphNode* Copy : Copies)
-			UE_LOG(LogGitBlueprintMergeTestCase, Display, TEXT("COPY  %s in %s at %d,%d, in graph list: %s"), *Copy->GetNodeTitle(ENodeTitleType::ListView).ToString(),
-				*Copy->GetGraph()->GetName(), Copy->NodePosX, Copy->NodePosY, Copy->GetGraph()->Nodes.Contains(Copy) ? TEXT("yes") : TEXT("no"));
+		{
+			int32 Links = 0;
+			for (const UEdGraphPin* Pin : Copy->Pins)
+			{
+				for (const UEdGraphPin* Linked : Pin->LinkedTo)
+				{
+					++Links;
+					const UEdGraphNode* Other = Linked->GetOwningNode();
+					UE_LOG(LogGitBlueprintMergeTestCase, Display, TEXT("COPY    %s.%s -> %s (%s).%s"), *Copy->GetName(), *Pin->PinName.ToString(), *Other->GetName(),
+						Copies.Contains(Other) ? TEXT("a copy") : TEXT("existing"), *Linked->PinName.ToString());
+				}
+			}
+			UE_LOG(LogGitBlueprintMergeTestCase, Display, TEXT("COPY  %s in %s at %d,%d, in graph list: %s, links %d"), *Copy->GetNodeTitle(ENodeTitleType::ListView).ToString(),
+				*Copy->GetGraph()->GetName(), Copy->NodePosX, Copy->NodePosY, Copy->GetGraph()->Nodes.Contains(Copy) ? TEXT("yes") : TEXT("no"), Links);
+		}
 
 		ReleaseRevision(Ours);
 		ReleaseRevision(Theirs);

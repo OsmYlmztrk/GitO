@@ -814,6 +814,13 @@ namespace GitBlueprintMerge
 				TargetGraphs.Add(GraphId(Graph), Graph);
 		}
 
+		TMap<FString, UEdGraphNode*> SourceById;
+		for (UEdGraphNode* Node : Nodes)
+		{
+			if (Node)
+				SourceById.Add(Node->NodeGuid.ToString(), Node);
+		}
+
 		// One paste per graph, so wires between the copied nodes are kept.
 		TMap<UEdGraph*, TSet<UObject*>> ByGraph;
 		for (UEdGraphNode* Node : Nodes)
@@ -833,6 +840,7 @@ namespace GitBlueprintMerge
 		}
 
 		TArray<UEdGraphNode*> Copies;
+		TMap<UEdGraphNode*, UEdGraphNode*> SourceOf;
 		for (const TPair<UEdGraph*, TSet<UObject*>>& Pair : ByGraph)
 		{
 			FString Text;
@@ -843,6 +851,9 @@ namespace GitBlueprintMerge
 			FEdGraphUtilities::ImportNodesFromText(Pair.Key, Retarget(Text), Imported);
 			for (UEdGraphNode* Node : Imported)
 			{
+				if (UEdGraphNode* const* From = SourceById.Find(Node->NodeGuid.ToString()))
+					SourceOf.Add(Node, *From);
+
 				// Already in the result: this is a second copy, so it needs its own id and a spot of its own.
 				if (TargetNodes.Contains(Node->NodeGuid.ToString()))
 				{
@@ -869,6 +880,50 @@ namespace GitBlueprintMerge
 				Node->NodePosX += FMath::RoundToInt32(DropAt->X) - MinX;
 				Node->NodePosY += FMath::RoundToInt32(DropAt->Y) - MinY;
 			}
+		}
+
+		// Wires to nodes outside the copy: connect them to the same nodes in the result, when the result has them. A pin
+		// that only takes one wire and already has one is left alone, so nothing already in the result gets rewired.
+		TArray<FString> NotConnected;
+		for (const TPair<UEdGraphNode*, UEdGraphNode*>& Pair : SourceOf)
+		{
+			UEdGraphNode* Copy = Pair.Key;
+			const UEdGraphSchema* Schema = Copy->GetGraph()->GetSchema();
+			for (const UEdGraphPin* FromPin : Pair.Value->Pins)
+			{
+				for (const UEdGraphPin* Other : FromPin->LinkedTo)
+				{
+					const UEdGraphNode* OtherNode = Other ? Other->GetOwningNode() : nullptr;
+					if (!OtherNode || SourceById.Contains(OtherNode->NodeGuid.ToString()))
+						continue;
+
+					UEdGraphNode* const* Mine = TargetNodes.Find(OtherNode->NodeGuid.ToString());
+					if (!Mine || (*Mine)->GetGraph() != Copy->GetGraph())
+						continue;
+
+					UEdGraphPin* A = Copy->FindPin(FromPin->PinName, FromPin->Direction);
+					UEdGraphPin* B = (*Mine)->FindPin(Other->PinName, Other->Direction);
+					if (!A || !B || A->LinkedTo.Contains(B))
+						continue;
+
+					if (Schema->CanCreateConnection(A, B).Response == CONNECT_RESPONSE_MAKE)
+					{
+						Schema->TryCreateConnection(A, B);
+					}
+					else
+					{
+						const UEdGraphPin* Out = A->Direction == EGPD_Output ? A : B;
+						const UEdGraphPin* In = A->Direction == EGPD_Output ? B : A;
+						NotConnected.Add(FString::Printf(TEXT("'%s' -> '%s'"),
+							*Out->GetOwningNode()->GetNodeTitle(ENodeTitleType::ListView).ToString(), *In->GetOwningNode()->GetNodeTitle(ENodeTitleType::ListView).ToString()));
+					}
+				}
+			}
+		}
+		if (NotConnected.Num() > 0)
+		{
+			const FString Text = TEXT("Not wired, because that pin in the result already has a wire (connect by hand if you want it): ") + FString::Join(NotConnected, TEXT(", "));
+			OutProblem = OutProblem.IsEmpty() ? Text : OutProblem + TEXT(" ") + Text;
 		}
 
 		if (Copies.Num() > 0)

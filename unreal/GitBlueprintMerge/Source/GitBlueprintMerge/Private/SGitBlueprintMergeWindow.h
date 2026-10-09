@@ -3,6 +3,7 @@
 #pragma once
 
 #include "BlueprintSnapshot.h"
+#include "GraphEditor.h"
 #include "Misc/NotifyHook.h"
 #include "Widgets/SCompoundWidget.h"
 #include "Widgets/Views/SListView.h"
@@ -147,6 +148,12 @@ private:
 	TSharedRef<class FUICommandList> MakeGraphCommands(GitBlueprintMerge::EResolution Side);
 	void CopyToClipboard(GitBlueprintMerge::EResolution Side);
 	void PasteFromClipboard();
+
+	/**
+	 * The node menu of the result graph (pin dropped on empty space, or right click): the same context-sensitive list as
+	 * the Blueprint editor, limited to adding nodes; actions that change the Blueprint itself (promote to variable, ...) are left out.
+	 */
+	FActionMenuContent OnCreateResultActionMenu(UEdGraph* Graph, const FVector2f& Location, const TArray<UEdGraphPin*>& Pins, bool bAutoExpand, SGraphEditor::FActionMenuClosed OnClosed);
 	/** Rebuilds the result column (after undo or a check); the others don't change. */
 	void RefreshResult();
 
