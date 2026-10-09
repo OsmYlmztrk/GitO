@@ -9,7 +9,9 @@
     <SuppressTrimAnalysisWarnings>true</SuppressTrimAnalysisWarnings>
     <InvariantGlobalization>false</InvariantGlobalization>
 
-    <Product>SourceGit</Product>
+    <!-- MyGitGUI: app name and title (assembly name stays SourceGit for avares:// URIs) -->
+    <Product>GitO</Product>
+    <AssemblyTitle>GitO</AssemblyTitle>
     <Description>OpenSource GIT client</Description>
     <Company>sourcegit-scm</Company>
     <Copyright>Copyright © $([System.DateTime]::Now.Year) sourcegit-scm.</Copyright>
@@ -77,6 +79,14 @@
     <ItemGroup>
       <AssemblyMetadata Include="FriendlyVersion" Value="$([System.String]::Copy('$(FriendlyVersion)').Replace('g', '').Trim())" />
     </ItemGroup>
+  </Target>
+
+  <!-- MyGitGUI: ship the app host as GitO.exe (it still loads SourceGit.dll) -->
+  <Target Name="CopyGitOExe" AfterTargets="Build" Condition="'$(OS)' == 'Windows_NT'">
+    <Copy SourceFiles="$(OutDir)$(AssemblyName).exe" DestinationFiles="$(OutDir)GitO.exe" SkipUnchangedFiles="true" Condition="Exists('$(OutDir)$(AssemblyName).exe')" />
+  </Target>
+  <Target Name="CopyGitOExePublish" AfterTargets="Publish" Condition="'$(OS)' == 'Windows_NT'">
+    <Copy SourceFiles="$(PublishDir)$(AssemblyName).exe" DestinationFiles="$(PublishDir)GitO.exe" SkipUnchangedFiles="true" Condition="Exists('$(PublishDir)$(AssemblyName).exe')" />
   </Target>
 </Project>
 

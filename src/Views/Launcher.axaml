@@ -14,12 +14,28 @@
                     MinWidth="1024" MinHeight="600">
   <Grid>
     <Grid.RowDefinitions>
-      <RowDefinition Height="{Binding #ThisControl.CaptionHeight}"/>
+      <!-- MyGitGUI: top strip with the centered app logo/name and the caption buttons, tabs below it -->
+      <RowDefinition Height="30"/>
+      <RowDefinition Height="32"/>
       <RowDefinition Height="*"/>
     </Grid.RowDefinitions>
 
+    <!-- MyGitGUI: app strip -->
+    <Grid Grid.Row="0" Background="{DynamicResource Brush.TitleBar}"
+          DoubleTapped="MaximizeOrRestoreWindow"
+          PointerPressed="BeginMoveWindow">
+      <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center" IsHitTestVisible="False">
+        <Image Width="18" Height="18" Margin="0,0,6,0" Source="/App.ico" VerticalAlignment="Center"/>
+        <TextBlock Text="GitO" FontWeight="Bold" FontSize="13" VerticalAlignment="Center"/>
+      </StackPanel>
+
+      <Border HorizontalAlignment="Right" IsVisible="{Binding #ThisControl.HasRightCaptionButton}">
+        <v:CaptionButtons Height="30" VerticalAlignment="Top"/>
+      </Border>
+    </Grid>
+
     <!-- Custom TitleBar -->
-    <Grid Grid.Row="0" ColumnDefinitions="Auto,32,32,*,Auto,Auto">
+    <Grid Grid.Row="1" ColumnDefinitions="Auto,32,32,*,Auto,Auto">
       <!-- Bottom border -->
       <Border Grid.Column="0" Grid.ColumnSpan="6"
               BorderThickness="0,0,0,1" BorderBrush="{DynamicResource Brush.Border0}"
@@ -136,14 +152,10 @@
         <Path Width="15" Height="15" Margin="0,4,0,0" Data="{StaticResource Icons.SoftwareUpdate}" Fill="{DynamicResource Brush.Accent}"/>
       </Button>
 
-      <!-- Caption Buttons (Windows/Linux) -->
-      <Border Grid.Column="5" IsVisible="{Binding #ThisControl.HasRightCaptionButton}">
-        <v:CaptionButtons Height="30" VerticalAlignment="Top"/>
-      </Border>
     </Grid>
 
     <!-- Page -->
-    <ContentControl Grid.Row="1" Content="{Binding ActivePage}" Background="{DynamicResource Brush.Window}">
+    <ContentControl Grid.Row="2" Content="{Binding ActivePage}" Background="{DynamicResource Brush.Window}">
       <ContentControl.DataTemplates>
         <DataTemplate DataType="vm:LauncherPage">
           <v:LauncherPage/>
@@ -152,7 +164,7 @@
     </ContentControl>
 
     <!-- Command Palette -->
-    <Border Grid.Row="0" Grid.RowSpan="2"
+    <Border Grid.Row="0" Grid.RowSpan="3"
             Background="Transparent"
             IsVisible="{Binding CommandPalette, Converter={x:Static ObjectConverters.IsNotNull}}"
             PointerPressed="OnCloseCommandPalette">
