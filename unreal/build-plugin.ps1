@@ -39,5 +39,7 @@ if (Test-Path $target) { Remove-Item -Recurse -Force $target }
 New-Item -ItemType Directory -Force $target | Out-Null
 Get-ChildItem "$work\pkg" | Where-Object { $_.Name -notin @("HostProject", "Intermediate") } |
     ForEach-Object { Copy-Item -Recurse $_.FullName $target }
+# The MIT license notice ships with every copy of the plugin.
+Copy-Item (Join-Path $PSScriptRoot "..\LICENSE") $target
 
 Write-Host "Installed GitBlueprintMerge for UE $EngineVersion to $target"

@@ -12,12 +12,13 @@
     <!-- MyGitGUI: app name and title (assembly name stays SourceGit for avares:// URIs) -->
     <Product>GitO</Product>
     <AssemblyTitle>GitO</AssemblyTitle>
-    <Description>OpenSource GIT client</Description>
-    <Company>sourcegit-scm</Company>
-    <Copyright>Copyright © $([System.DateTime]::Now.Year) sourcegit-scm.</Copyright>
+    <!-- MyGitGUI: GitO owner; SourceGit's copyright stays in LICENSE, About shows "Based on SourceGit" -->
+    <Description>GitO Git client, based on SourceGit (MIT)</Description>
+    <Company>Osman Yılmaztürk</Company>
+    <Copyright>Copyright © $([System.DateTime]::Now.Year) Osman Yılmaztürk</Copyright>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
-    <PackageProjectUrl>https://github.com/sourcegit-scm/sourcegit.git</PackageProjectUrl>
-    <RepositoryUrl>https://github.com/sourcegit-scm/sourcegit.git</RepositoryUrl>
+    <PackageProjectUrl>https://github.com/OsmYlmztrk/GitO</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/OsmYlmztrk/GitO.git</RepositoryUrl>
     <RepositoryType>Public</RepositoryType>
   </PropertyGroup>
 
@@ -29,6 +30,11 @@
 
   <PropertyGroup Condition="$([MSBuild]::IsOSPlatform('OSX'))">
     <SupportedOSPlatformVersion>13.0</SupportedOSPlatformVersion>
+  </PropertyGroup>
+
+  <!-- MyGitGUI: update check still reads SourceGit's version.json; off until it points at GitO releases (docs/todo.md) -->
+  <PropertyGroup>
+    <DisableUpdateDetection Condition="'$(DisableUpdateDetection)' == ''">true</DisableUpdateDetection>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(DisableUpdateDetection)' == 'true'">
@@ -80,6 +86,12 @@
       <AssemblyMetadata Include="FriendlyVersion" Value="$([System.String]::Copy('$(FriendlyVersion)').Replace('g', '').Trim())" />
     </ItemGroup>
   </Target>
+
+  <!-- MyGitGUI: license notices ship next to the exe (MIT/OFL/BSD require them in every copy) -->
+  <ItemGroup>
+    <None Include="..\LICENSE" Link="LICENSE" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <None Include="..\THIRD-PARTY-LICENSES.md" Link="THIRD-PARTY-LICENSES.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
 
   <!-- MyGitGUI: ship the app host as GitO.exe (it still loads SourceGit.dll) -->
   <Target Name="CopyGitOExe" AfterTargets="Build" Condition="'$(OS)' == 'Windows_NT'">

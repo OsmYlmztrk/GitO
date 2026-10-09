@@ -1,6 +1,7 @@
 using System;
 using System.Reflection;
 using System.Text.RegularExpressions;
+using Avalonia.Input;
 using Avalonia.Interactivity;
 
 namespace SourceGit.Views
@@ -47,17 +48,20 @@ namespace SourceGit.Views
             if (endOfTagIdx > 0)
                 ver = ver.Substring(0, endOfTagIdx);
 
-            Native.OS.OpenBrowser($"https://github.com/sourcegit-scm/sourcegit/releases/tag/{ver}");
-            e.Handled = true;
-        }
-
-        private void OnVisitWebsite(object _, RoutedEventArgs e)
-        {
-            Native.OS.OpenBrowser("https://sourcegit-scm.github.io/");
+            // MyGitGUI: GitO releases
+            Native.OS.OpenBrowser($"https://github.com/OsmYlmztrk/GitO/releases/tag/{ver}");
             e.Handled = true;
         }
 
         private void OnVisitSourceCode(object _, RoutedEventArgs e)
+        {
+            // MyGitGUI: GitO repo
+            Native.OS.OpenBrowser("https://github.com/OsmYlmztrk/GitO");
+            e.Handled = true;
+        }
+
+        // MyGitGUI: SourceGit attribution link
+        private void OnVisitUpstream(object _, PointerPressedEventArgs e)
         {
             Native.OS.OpenBrowser("https://github.com/sourcegit-scm/sourcegit");
             e.Handled = true;

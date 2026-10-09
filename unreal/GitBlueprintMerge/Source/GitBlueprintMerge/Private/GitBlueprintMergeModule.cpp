@@ -1,4 +1,4 @@
-// Copyright (c) MyGitGUI contributors. MIT License.
+// Copyright (c) 2026 Osman Yılmaztürk. MIT License.
 
 #include "Editor.h"
 #include "Engine/Engine.h"

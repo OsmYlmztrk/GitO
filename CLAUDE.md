@@ -7,6 +7,7 @@ A personal, Windows-only Git GUI that looks like Fork, built on a fork of Source
   - Our changes in upstream files are marked with `// MyGitGUI:` comments.
   - Our new files say "MyGitGUI" in their summary.
 - `unreal/GitBlueprintMerge/`: our Unreal Engine 5.8 editor plugin that three-way merges conflicted `.uasset` files (Blueprint, Data Asset, Data Table, Material Instance). **Read [docs/unreal-merge.md](docs/unreal-merge.md) before working on Unreal merge, on either the plugin or the GUI side.**
+- `docs/todo.md`: the agreed to-do list (priorities, decisions, rejected ideas). Check it before proposing work; keep it current.
 - `upstream` remote = sourcegit-scm/sourcegit. Work happens on branch `mygitgui`; `master` tracks `upstream/master`.
 
 ## Build
