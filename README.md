@@ -14,6 +14,8 @@ GitO is based on [SourceGit](https://github.com/sourcegit-scm/sourcegit), an ope
 
 Everything else (history, staging, diff, stash, worktrees, LFS, themes, and more) comes from SourceGit.
 
+**Using GitO with Unreal Engine? Read the [Unreal guide](docs/unreal-guide.md)**: what to install, how to set up the repository (LFS, locks) and how to merge conflicted assets.
+
 ## Install
 
 Download `GitO-win-Setup.exe` from the [latest release](https://github.com/OsmYlmztrk/GitO/releases/latest) and run it. It installs for the current user (no admin rights) and keeps GitO up to date: when a new version is out, GitO shows it and installs it with one click.

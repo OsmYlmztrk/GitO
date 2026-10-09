@@ -200,11 +200,11 @@ Model elements as entities with a stable key, like MI params or DT rows. Arrays 
 3. Element-wise merge for arrays/maps/sets; instanced subobject contents; MI layers and masks; DT row order (theirs' new rows are appended).
 4. More kinds: String Table, Curve Table, User Defined Enum/Struct, Blackboard, Behavior Tree, Material, levels.
 5. Distribution:
-   - The plugin is only built for UE 5.8, and building needs Visual Studio.
+   - GitO ships the prebuilt plugin for UE 5.8 (Launcher) only; other versions need their own build (and Visual Studio to make it).
    - The plugin name still says "Blueprint".
    - `report.json` `kind` is unused by the GUI.
-   - No CI or automated tests.
+   - No automated tests in CI (runners have no Unreal).
 6. Housekeeping:
    - `.mcp.json` (local Unreal MCP config, `127.0.0.1:8000`) is intentionally uncommitted.
-   - Nothing is pushed.
    - `Unreal Projects\MergeLabData` is a leftover test copy and can be deleted.
+   - User guide: `docs/unreal-guide.md` (keep its supported-kinds table in sync with the one above).
