@@ -33,7 +33,7 @@ namespace SourceGit.Views
             {
                 var ver = assembly.GetName().Version;
                 if (ver != null)
-                    TxtVersion.Text = $"v{ver.Major}.{ver.Minor:D2}";
+                    TxtVersion.Text = $"v{ver.Major}.{ver.Minor}.{Math.Max(ver.Build, 0)}"; // MyGitGUI: three-part GitO versions
             }
 
             var copyright = assembly.GetCustomAttribute<AssemblyCopyrightAttribute>();
@@ -67,7 +67,8 @@ namespace SourceGit.Views
             e.Handled = true;
         }
 
-        [GeneratedRegex(@"^v\d{4}\.\d{1,2}(?:\-\d+\-[0-9a-f]{8})?(?:\-dirty)?$")]
+        // MyGitGUI: GitO tags are vX.Y.Z (SourceGit's year-based tags fall back to the assembly version)
+        [GeneratedRegex(@"^v\d{1,3}\.\d+\.\d+(?:\-\d+\-[0-9a-f]{8})?(?:\-dirty)?$")]
         private static partial Regex REG_FRIENDLY_VERSION();
     }
 }

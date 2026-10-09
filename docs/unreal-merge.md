@@ -18,6 +18,8 @@ Read this before touching either side. Status as of 2026-10-04, branch `mygitgui
 powershell -ExecutionPolicy Bypass -File unreal\build-plugin.ps1 -EngineVersion 5.8
 ```
 - Installs to `%APPDATA%\MyGitGUI\UnrealPlugins\5.8\GitBlueprintMerge\`. The GUI finds it there via `UnrealEngine.FindMergePlugin`.
+- Also refreshes `unreal/prebuilt/5.8/GitBlueprintMerge/` (binaries, `.uplugin`, `LICENSE`; no Source/pdb). **Commit it after every plugin change:** GitO ships this copy (csproj `UnrealPlugins\**`), and `Models/UnrealPluginInstaller.cs` copies it to the path above on startup unless the installed DLL is newer. GitHub runners have no Unreal, so a release can only ship what is committed here.
+- The prebuilt DLL carries the engine `BuildId` (`UnrealEditor.modules`); it works on Launcher installs of 5.8. Other engine versions or source builds need their own build.
 - Engine: `C:\Program Files\Epic Games\UE_5.8`.
 - To check a build, grep the output for `error|GitBlueprintMerge\\Source.*warning|Result:`. Engine headers emit many unrelated C4996 warnings.
 - GUI build: `dotnet build src/SourceGit.csproj -c Debug`.

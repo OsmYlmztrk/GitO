@@ -42,6 +42,13 @@ The project uses the following third-party libraries or assets
 - **License**: MIT License
 - **License Link**: https://github.com/CommunityToolkit/dotnet/blob/main/License.md
 
+### Velopack
+
+- **Source**: https://github.com/velopack/velopack
+- **Version**: 1.2.161
+- **License**: MIT License
+- **License Link**: https://github.com/velopack/velopack/blob/develop/LICENSE
+
 ### OpenAI .NET SDK
 
 - **Source**: https://github.com/openai/openai-dotnet

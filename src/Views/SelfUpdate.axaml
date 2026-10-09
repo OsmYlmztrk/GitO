@@ -56,7 +56,7 @@
                 <Run Text="{Binding CurrentVersionStr, Mode=OneWay}"/>
               </TextBlock>
 
-              <TextBlock Margin="0,2,0,0">
+              <TextBlock Margin="0,2,0,0" IsVisible="{Binding HasReleaseDate}">
                 <Run Text="{DynamicResource Text.SelfUpdate.ReleaseDate}" FontWeight="Bold" Foreground="{DynamicResource Brush.FG2}"/>
                 <Run Text="{Binding ReleaseDateStr, Mode=OneWay}"/>
               </TextBlock>
@@ -69,16 +69,36 @@
                 <v:UpdateInfoView/>
               </Border>
 
+              <!-- MyGitGUI: download progress / error of the in-app update -->
+              <TextBlock x:Name="TxtUpdateStatus"
+                         Margin="0,8,0,0"
+                         MaxWidth="500"
+                         HorizontalAlignment="Center"
+                         TextWrapping="Wrap"
+                         IsVisible="False"/>
+
               <StackPanel Margin="0,8,0,0" Orientation="Horizontal" HorizontalAlignment="Center">
-                <Button Classes="flat primary"
+                <!-- MyGitGUI: installs the update (Velopack) instead of opening the download page -->
+                <Button x:Name="BtnUpdateNow"
+                        Classes="flat primary"
                         Height="30"
-                        Click="GotoDownload"
+                        Click="UpdateNow"
                         HorizontalContentAlignment="Center"
                         VerticalContentAlignment="Center">
                   <StackPanel Orientation="Horizontal">
                     <Path Width="12" Height="12" Data="{StaticResource Icons.Pull}" Fill="{DynamicResource AccentButtonForeground}"/>
-                    <TextBlock Text="{DynamicResource Text.SelfUpdate.GotoDownload}" Margin="8,0,0,0" Foreground="{DynamicResource AccentButtonForeground}"/>
+                    <TextBlock Text="Update and Restart" Margin="8,0,0,0" Foreground="{DynamicResource AccentButtonForeground}"/>
                   </StackPanel>
+                </Button>
+
+                <Button Classes="flat"
+                        Height="30"
+                        Margin="8,0,0,0"
+                        Click="GotoDownload"
+                        HorizontalContentAlignment="Center"
+                        VerticalContentAlignment="Center"
+                        ToolTip.Tip="Open the release page on GitHub">
+                  <TextBlock Text="Release Page"/>
                 </Button>
 
                 <Button Classes="flat"

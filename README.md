@@ -14,11 +14,17 @@ GitO is based on [SourceGit](https://github.com/sourcegit-scm/sourcegit), an ope
 
 Everything else (history, staging, diff, stash, worktrees, LFS, themes, and more) comes from SourceGit.
 
+## Install
+
+Download `GitO-win-Setup.exe` from the [latest release](https://github.com/OsmYlmztrk/GitO/releases/latest) and run it. It installs for the current user (no admin rights) and keeps GitO up to date: when a new version is out, GitO shows it and installs it with one click.
+
+The installer is not code-signed yet, so Windows SmartScreen may warn on first run: choose "More info" → "Run anyway".
+
 ## Requirements
 
 * Windows 10/11 (64-bit)
 * [Git](https://git-scm.com/download/win) 2.25.1 or later
-* For Unreal asset merge: Unreal Engine 5.8 installed (your own Epic license); the plugin is built with `unreal/build-plugin.ps1`
+* For Unreal asset merge: Unreal Engine 5.8 installed from the Epic Games Launcher (your own Epic license). The merge plugin comes with GitO; nothing else to install.
 
 ## Build
 

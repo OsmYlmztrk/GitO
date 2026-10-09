@@ -3,6 +3,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Interactivity;
+using Avalonia.Threading;
 using AvaloniaEdit;
 using AvaloniaEdit.Document;
 using AvaloniaEdit.Editing;
@@ -75,11 +76,45 @@ namespace SourceGit.Views
             Close();
         }
 
-        private void GotoDownload(object _, RoutedEventArgs e)
+        private void GotoDownload(object sender, RoutedEventArgs e)
         {
             // MyGitGUI: GitO releases
-            Native.OS.OpenBrowser("https://github.com/OsmYlmztrk/GitO/releases/latest");
+            if (sender is Button { DataContext: Models.Version ver })
+                Native.OS.OpenBrowser($"{Models.AppUpdater.RepositoryUrl}/releases/tag/{ver.TagName}");
+            else
+                Native.OS.OpenBrowser($"{Models.AppUpdater.RepositoryUrl}/releases/latest");
             e.Handled = true;
+        }
+
+        // MyGitGUI: download the update with Velopack, then GitO closes, installs it and restarts.
+        private async void UpdateNow(object sender, RoutedEventArgs e)
+        {
+            e.Handled = true;
+            if (sender is not Button { DataContext: Models.Version ver } btn)
+                return;
+
+            var status = btn.FindNameScope()?.Find<TextBlock>("TxtUpdateStatus");
+            void ShowStatus(string text)
+            {
+                if (status != null)
+                {
+                    status.Text = text;
+                    status.IsVisible = true;
+                }
+            }
+
+            btn.IsEnabled = false;
+            ShowStatus("Downloading...");
+
+            try
+            {
+                await Models.AppUpdater.DownloadAndRestartAsync(ver, p => Dispatcher.UIThread.Post(() => ShowStatus($"Downloading... {p}%")));
+            }
+            catch (Exception ex)
+            {
+                ShowStatus($"Update failed: {ex.Message}");
+                btn.IsEnabled = true;
+            }
         }
 
         private void IgnoreThisVersion(object sender, RoutedEventArgs e)

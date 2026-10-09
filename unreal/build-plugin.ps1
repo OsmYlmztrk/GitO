@@ -42,4 +42,13 @@ Get-ChildItem "$work\pkg" | Where-Object { $_.Name -notin @("HostProject", "Inte
 # The MIT license notice ships with every copy of the plugin.
 Copy-Item (Join-Path $PSScriptRoot "..\LICENSE") $target
 
+# Refresh the prebuilt copy that GitO ships (unreal\prebuilt\<ver>, commit it): binaries only, no Source or pdb.
+$prebuilt = Join-Path $PSScriptRoot "prebuilt\$EngineVersion\GitBlueprintMerge"
+if (Test-Path $prebuilt) { Remove-Item -Recurse -Force $prebuilt }
+New-Item -ItemType Directory -Force "$prebuilt\Binaries\Win64" | Out-Null
+Copy-Item (Join-Path $target "GitBlueprintMerge.uplugin") $prebuilt
+Copy-Item (Join-Path $target "LICENSE") $prebuilt
+Get-ChildItem (Join-Path $target "Binaries\Win64") -File | Where-Object { $_.Extension -ne ".pdb" } |
+    ForEach-Object { Copy-Item $_.FullName "$prebuilt\Binaries\Win64\" }
+
 Write-Host "Installed GitBlueprintMerge for UE $EngineVersion to $target"

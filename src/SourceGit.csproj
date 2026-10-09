@@ -32,11 +32,6 @@
     <SupportedOSPlatformVersion>13.0</SupportedOSPlatformVersion>
   </PropertyGroup>
 
-  <!-- MyGitGUI: update check still reads SourceGit's version.json; off until it points at GitO releases (docs/todo.md) -->
-  <PropertyGroup>
-    <DisableUpdateDetection Condition="'$(DisableUpdateDetection)' == ''">true</DisableUpdateDetection>
-  </PropertyGroup>
-
   <PropertyGroup Condition="'$(DisableUpdateDetection)' == 'true'">
     <DefineConstants>$(DefineConstants);DISABLE_UPDATE_DETECTION</DefineConstants>
   </PropertyGroup>
@@ -68,6 +63,7 @@
     <PackageReference Include="OpenAI" Version="2.10.0" />
     <PackageReference Include="Pfim" Version="0.11.4" />
     <PackageReference Include="StbImageSharp" Version="2.30.15" />
+    <PackageReference Include="Velopack" Version="1.2.161" /><!-- MyGitGUI: installer + self-update -->
 
     <ProjectReference Include="../depends/AvaloniaEdit/src/AvaloniaEdit.TextMate/AvaloniaEdit.TextMate.csproj" />
   </ItemGroup>
@@ -91,6 +87,11 @@
   <ItemGroup>
     <None Include="..\LICENSE" Link="LICENSE" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <None Include="..\THIRD-PARTY-LICENSES.md" Link="THIRD-PARTY-LICENSES.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <!-- MyGitGUI: prebuilt GitBlueprintMerge Unreal plugin; copied to the config dir on startup (Models/UnrealPluginInstaller.cs) -->
+  <ItemGroup>
+    <None Include="..\unreal\prebuilt\**\*" Link="UnrealPlugins\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 
   <!-- MyGitGUI: ship the app host as GitO.exe (it still loads SourceGit.dll) -->

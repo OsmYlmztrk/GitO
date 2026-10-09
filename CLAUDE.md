@@ -12,7 +12,14 @@ A personal, Windows-only Git GUI that looks like Fork, built on a fork of Source
 
 ## Build
 - App: `dotnet build src/SourceGit.csproj -c Debug`
-- Unreal plugin: `powershell -ExecutionPolicy Bypass -File unreal\build-plugin.ps1 -EngineVersion 5.8`. Always use this script: it builds from an ASCII temp path, because UBT fails on the repo's `OneDrive\Masaüstü` path.
+- Unreal plugin: `powershell -ExecutionPolicy Bypass -File unreal\build-plugin.ps1 -EngineVersion 5.8`. Always use this script: it builds from an ASCII temp path, because UBT fails on the repo's `OneDrive\Masaüstü` path. It also refreshes `unreal/prebuilt/5.8/`, which GitO ships: commit that folder after plugin changes.
+- Local Release (AOT) publish fails on the non-ASCII repo path; CI builds releases. For a local package test use `-p:DisableAOT=true`.
+
+## Releases
+- Public repo: https://github.com/OsmYlmztrk/GitO (`origin`, branch `main` = local `mygitgui`). Don't push upstream's tags.
+- Versions are `X.Y.Z`; `VERSION` is the default for local builds, the tag sets the release version. On upstream merges keep our `VERSION`.
+- Release: push a tag `vX.Y.Z` (only when asked). `.github/workflows/release.yml` publishes (AOT), packs with Velopack (`vpk`) and creates the GitHub Release with `GitO-win-Setup.exe`, update packages and notes from commit subjects.
+- Installed copies update themselves (`Models/AppUpdater.cs`: Velopack + GitHub releases); dev builds don't.
 
 ## Working rules
 - **Testing:** never drive the user's mouse/keyboard or click in the app or in Unreal. Build, then give the user a short checklist. CLI checks are fine: git scratch repos, Unreal commandlets, reading generated JSON.

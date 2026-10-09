@@ -1,0 +1,71 @@
+# MyGitGUI: builds GitO for Windows and publishes it as a GitHub Release with a Velopack installer
+# (GitO-win-Setup.exe) and update packages. Run it by pushing a tag: git tag v1.0.1 && git push origin v1.0.1
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    env:
+      VPK_VERSION: 1.2.161
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Version from tag
+        shell: pwsh
+        run: |
+          $version = '${{ github.ref_name }}'.TrimStart('v')
+          "VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Release notes
+        shell: pwsh
+        run: |
+          $previous = git describe --tags --abbrev=0 --match 'v*.*.*' '${{ github.ref_name }}^' 2>$null
+          $range = if ($previous) { "$previous..${{ github.ref_name }}" } else { '${{ github.ref_name }}' }
+          $lines = git log $range --no-merges --pretty=format:'- %s' -- . ':(exclude)docs'
+          if (-not $previous) { $lines = '- First GitO release.' }
+          ("## GitO ${{ env.VERSION }}", '', $lines) | Out-File -FilePath notes.md -Encoding utf8
+
+      - name: Publish
+        run: dotnet publish src/SourceGit.csproj -c Release -r win-x64 -o publish -p:Version=${{ env.VERSION }}
+
+      - name: Tidy publish folder
+        shell: pwsh
+        run: |
+          # GitO.exe is the app; SourceGit.exe is the same binary under the old name.
+          Remove-Item publish/SourceGit.exe, publish/*.pdb -ErrorAction SilentlyContinue
+          if (-not (Test-Path publish/GitO.exe)) { throw 'publish/GitO.exe is missing' }
+          if (-not (Test-Path publish/UnrealPlugins/5.8/GitBlueprintMerge/GitBlueprintMerge.uplugin)) { throw 'bundled Unreal plugin is missing' }
+
+      - name: Install vpk
+        run: dotnet tool install -g vpk --version ${{ env.VPK_VERSION }}
+
+      - name: Download previous release (for delta updates)
+        continue-on-error: true
+        run: vpk download github --repoUrl https://github.com/${{ github.repository }} --token ${{ secrets.GITHUB_TOKEN }} -o releases
+
+      - name: Pack
+        run: >
+          vpk pack --packId GitO --packVersion ${{ env.VERSION }} --packDir publish --mainExe GitO.exe
+          --packTitle GitO --packAuthors "Osman Yılmaztürk" --icon src/App.ico --releaseNotes notes.md -o releases
+
+      - name: Upload to GitHub Release
+        run: >
+          vpk upload github --repoUrl https://github.com/${{ github.repository }} --token ${{ secrets.GITHUB_TOKEN }}
+          --publish --releaseName "GitO ${{ env.VERSION }}" --tag ${{ github.ref_name }} -o releases

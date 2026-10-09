@@ -2,6 +2,15 @@
 
 Agreed with the user on 2026-10-10. Keep this file current: tick items when done, add new decisions with a date.
 
+## ⚠️ NEXT UP: VERY IMPORTANT (user, 2026-10-10)
+- [x] **Ship the prebuilt GitBlueprintMerge plugin with GitO** (done 2026-10-10, waiting for the user's test).
+  - Binaries are committed in `unreal/prebuilt/5.8/GitBlueprintMerge/` (dll, `.modules`, `.uplugin`, `LICENSE`; no Source/pdb). `build-plugin.ps1` refreshes that folder; commit it after every plugin change.
+  - The csproj copies them next to `GitO.exe` as `UnrealPlugins/5.8/...` (build, publish, Velopack package; checked in a local `vpk pack`).
+  - `Models/UnrealPluginInstaller.cs` copies them on startup to `<config dir>/UnrealPlugins/<engine>/GitBlueprintMerge/` unless the installed DLL is newer (a local dev build). Copy is atomic per file; a DLL locked by a running Unreal is skipped until the next start. Portable mode uses the same `ConfigDir`.
+  - Hint text in `Views/Conflict.axaml` no longer mentions `build-plugin.ps1`.
+  - Limits: UE 5.8 Launcher installs only (the DLL carries the engine `BuildId`); other versions need their own build.
+- [ ] **User test:** install `GitO-win-Setup.exe` on a PC without the plugin (or after deleting `%APPDATA%\MyGitGUI\UnrealPlugins`), start GitO, check the folder is created; conflicted `.uasset` → "Merge in Unreal" opens our merge window.
+
 ## Waiting (user said "wait")
 - Commit the uncommitted UI work: unpushed/unpulled commit badge (`Views/CommitStatusIndicator.cs`), narrower toolbar (`Views/RepositoryToolbar.axaml`), `Views/WorkingCopy.axaml`. Needs the user's test first.
 
@@ -33,15 +42,16 @@ Background: the plugin snapshots each revision into facts and applies theirs ont
 ## 4. Distribution and auto-update (decided 2026-10-10)
 Decision: public GitHub repo, releases on GitHub Releases, installer + self-update with Velopack (MIT, delta updates, per-user install, no admin). Rejected hosts: Google Drive (virus-scan interstitial on files over 100 MB breaks automatic download, download quotas), private repo with token in the app.
 
-- [x] (2026-10-10: update check turned off by default in the csproj, `DisableUpdateDetection=true`; turn it back on with step 2.) **Bug first:** `App.Check4Update` (`src/App.axaml.cs`) still reads `https://sourcegit-scm.github.io/data/version.json`, so GitO can show SourceGit releases as updates. Until step 2 lands, disable it (`DISABLE_UPDATE_DETECTION`) or point it at our repo.
+- [x] **Bug first:** `App.Check4Update` read SourceGit's `version.json`. Fixed: it now uses Velopack (below); the temporary `DisableUpdateDetection=true` default is removed again.
 - [x] Before going public: scan the whole commit history for tokens, internal paths and private assets. `.mcp.json` stays uncommitted.
 - [x] User creates the public GitHub repo (`OsmYlmztrk/GitO`) and pushes `mygitgui` (outward-facing, the user does it). Depends on "GitHub fork + origin remote" under Waiting.
-- [ ] `VelopackApp.Build().Run()` at the top of `Program.Main`.
-- [ ] Replace `Check4Update` with Velopack `UpdateManager` + `GithubSource`. Keep the existing startup banner and the "ignore this version" setting; the button downloads, applies and restarts.
+- [x] `VelopackApp.Build().Run()` at the top of `App.Main` (Velopack 1.2.161). Checked under NativeAOT: the install hook runs and exits.
+- [x] `Check4Update` uses `Models/AppUpdater.cs` (Velopack `UpdateManager` + `GithubSource`). Startup banner and "ignore this version" kept; the dialog has "Update and Restart" (download with progress, apply, restart) and "Release Page". The automatic check is silent in copies not installed by the setup (dev builds).
+- [x] Versions are now three-part: `VERSION` = `1.0.0`, tags `vX.Y.Z`; About and the update dialog show `vX.Y.Z`.
 - [x] Point the About window and `.csproj` URLs at our repo instead of sourcegit-scm (`https://github.com/OsmYlmztrk/GitO`).
-- [ ] New `release.yml`: on a `v*` tag, `dotnet publish -r win-x64 --self-contained`, `vpk pack` (`GitO-Setup.exe` + delta packages), upload to the GitHub Release. Turn off upstream's Linux/macOS packaging workflows.
-- [ ] Optional: attach the Unreal plugin binaries to the release as a separate zip (not auto-updated; it lives in the UE install).
-- [ ] Test: build two versions locally with `vpk pack`, give the user a checklist (install old, publish new, update arrives, app restarts on the new version).
+- [x] `.github/workflows/release.yml`: on a `vX.Y.Z` tag, AOT publish, drop `SourceGit.exe`/pdb, check `GitO.exe` and the plugin are there, `vpk download` (previous release, for deltas), `vpk pack` (`GitO-win-Setup.exe`, full/delta nupkg, portable zip), `vpk upload github --publish`. Release notes = commit subjects since the previous tag.
+- [x] Bundle the prebuilt Unreal plugin with the installer (see NEXT UP).
+- [ ] **User test of self-update:** install v1.0.0 with the setup, publish v1.0.1 (tag), start GitO → banner → "Update and Restart" → GitO restarts on v1.0.1 (About shows it).
 - Known limit: the exe is unsigned, so Windows SmartScreen warns on first run. No fully free fix (Azure Trusted Signing is about $10/month; SignPath's free plan is for open-source projects only, could apply once public).
 
 ### License compliance and attribution (checked 2026-10-10)

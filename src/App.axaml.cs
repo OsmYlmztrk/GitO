@@ -23,6 +23,9 @@ namespace SourceGit
         [STAThread]
         public static void Main(string[] args)
         {
+            // MyGitGUI: Velopack install/update/uninstall hooks; must run first (it may exit the process).
+            Velopack.VelopackApp.Build().Run();
+
             Native.OS.SetupBasicDirectories();
 
             AppDomain.CurrentDomain.UnhandledException += (_, e) =>
@@ -42,7 +45,11 @@ namespace SourceGit
                 else if (TryLaunchAsRebaseMessageEditor(args, out int exitMessage))
                     Environment.Exit(exitMessage);
                 else
+                {
+                    // MyGitGUI: put the bundled Unreal merge plugin where Models.UnrealEngine.FindMergePlugin looks.
+                    Task.Run(Models.UnrealPluginInstaller.Install);
                     BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
+                }
             }
             catch (Exception ex)
             {
@@ -554,28 +561,25 @@ namespace SourceGit
             {
                 try
                 {
-                    // Fetch latest release information.
-                    using var client = new HttpClient();
-                    client.Timeout = TimeSpan.FromSeconds(5);
-
-                    var data = await client.GetStringAsync("https://sourcegit-scm.github.io/data/version.json");
-                    var ver = JsonSerializer.Deserialize(data, JsonCodeGen.Default.Version);
-                    if (ver == null)
+                    // MyGitGUI: GitO releases through Velopack (Models/AppUpdater.cs) instead of SourceGit's version.json.
+                    // The automatic check stays silent in a copy that wasn't installed with the setup (e.g. a dev build).
+                    if (!manually && !Models.AppUpdater.IsInstalled)
                         return;
 
+                    var ver = await Models.AppUpdater.CheckAsync();
                     if (manually)
                     {
-                        if (ver.IsNewVersion)
+                        if (ver != null)
                             ShowSelfUpdateResult(ver);
                         else
                             ShowSelfUpdateResult(new Models.AlreadyUpToDate());
                     }
                     else if (_launcher != null)
                     {
-                        if (!ver.IsNewVersion || ver.TagName == ViewModels.Preferences.Instance.IgnoreUpdateTag)
+                        if (ver == null || ver.TagName == ViewModels.Preferences.Instance.IgnoreUpdateTag)
                             return;
 
-                        _launcher.NewVersion = ver;
+                        Dispatcher.UIThread.Post(() => _launcher.NewVersion = ver);
                     }
                 }
                 catch (Exception e)

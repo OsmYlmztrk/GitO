@@ -21,14 +21,23 @@ namespace SourceGit.Models
         [JsonIgnore]
         public System.Version CurrentVersion { get; }
 
+        // MyGitGUI: GitO uses three-part versions (1.0.0)
         [JsonIgnore]
-        public string CurrentVersionStr => $"v{CurrentVersion.Major}.{CurrentVersion.Minor:D2}";
+        public string CurrentVersionStr => $"v{CurrentVersion.Major}.{CurrentVersion.Minor}.{Math.Max(CurrentVersion.Build, 0)}";
 
         [JsonIgnore]
         public bool IsNewVersion => CurrentVersion.CompareTo(new System.Version(TagName.Substring(1))) < 0;
 
         [JsonIgnore]
         public string ReleaseDateStr => DateTimeFormat.Format(PublishedAt, true);
+
+        // MyGitGUI: Velopack doesn't report a release date
+        [JsonIgnore]
+        public bool HasReleaseDate => PublishedAt != default;
+
+        /// <summary>MyGitGUI: the Velopack update to download and apply.</summary>
+        [JsonIgnore]
+        public Velopack.UpdateInfo Update { get; set; }
 
         public Version()
         {

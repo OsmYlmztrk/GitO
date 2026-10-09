@@ -311,7 +311,7 @@
               </StackPanel>
               <TextBlock Classes="how"
                          IsVisible="{Binding !HasMergePlugin}"
-                         Text="Compare shows Ours and Theirs side by side in Unreal. Merge opens Unreal's merge window, which can only keep one side. Install the GitBlueprintMerge plugin (unreal/build-plugin.ps1) to merge Blueprints, Data Assets, Data Tables and Material Instances change by change."/>
+                         Text="Compare shows Ours and Theirs side by side in Unreal. Merge opens Unreal's merge window, which can only keep one side. GitO ships the GitBlueprintMerge plugin, which merges Blueprints, Data Assets, Data Tables and Material Instances change by change, but only for Unreal 5.8; it isn't available for this project's engine."/>
 
               <StackPanel Orientation="Horizontal" Spacing="8">
                 <Button Classes="flat" Height="28" Padding="10,0" Click="OnCompareInUnreal" IsEnabled="{Binding CanOpenInUnreal}"
