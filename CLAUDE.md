@@ -28,4 +28,4 @@ A personal, Windows-only Git GUI that looks like Fork, built on a fork of Source
   - Don't copy Fork's branding or icons; reuse layout only.
   - Never copy Unreal Engine source into the repo (EULA); only call engine APIs.
 - **Unreal merge window:** buttons only, except graph editing (user request, 2026-10-10): Ctrl+C in any graph; Ctrl+V, Delete, Ctrl+Z, Ctrl+Y in the Result graph. Don't add other shortcuts.
-- **Commits:** only when asked. `.mcp.json` (local Unreal MCP config) stays uncommitted.
+- **Commits:** only when asked. No `Co-Authored-By: Claude` (or any AI) trailer in commit messages (user, 2026-10-10); the AI note lives in the README. `.mcp.json` (local Unreal MCP config) stays uncommitted.

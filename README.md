@@ -42,7 +42,7 @@ powershell -ExecutionPolicy Bypass -File unreal\build-plugin.ps1 -EngineVersion 
 
 ## Built with AI
 
-GitO's changes to SourceGit and the Unreal plugin were written with AI assistance ([Claude Code](https://claude.com/claude-code) by Anthropic); commits carry a `Co-Authored-By: Claude` line. The app icon was generated with ChatGPT (OpenAI). Osman Yılmaztürk directs, reviews and tests the work.
+GitO's changes to SourceGit and the Unreal plugin were written with AI assistance ([Claude Code](https://claude.com/claude-code) by Anthropic). The app icon was generated with ChatGPT (OpenAI). Osman Yılmaztürk directs, reviews and tests the work.
 
 ## License
 
