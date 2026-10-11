@@ -11,8 +11,16 @@ Agreed with the user on 2026-10-10. Keep this file current: tick items when done
   - Limits: UE 5.8 Launcher installs only (the DLL carries the engine `BuildId`); other versions need their own build.
 - [ ] **User test:** install `GitO-win-Setup.exe` on a PC without the plugin (or after deleting `%APPDATA%\MyGitGUI\UnrealPlugins`), start GitO, check the folder is created; conflicted `.uasset` → "Merge in Unreal" opens our merge window.
 
-## Waiting (user said "wait")
-- Commit the uncommitted UI work: unpushed/unpulled commit badge (`Views/CommitStatusIndicator.cs`), narrower toolbar (`Views/RepositoryToolbar.axaml`), `Views/WorkingCopy.axaml`. Needs the user's test first.
+## Unreal setup inside the app (user, 2026-10-10)
+Goal: people see what GitO installs and does for Unreal, can act on it with buttons, and can read the details on GitHub. Every panel says what a button will do before it does it, and links to the matching section of `docs/unreal-guide.md` on GitHub (`https://github.com/OsmYlmztrk/GitO/blob/main/docs/unreal-guide.md#...`).
+
+- [ ] **Preferences → "Unreal Engine" page:**
+  - installed engines (Launcher list + registered source builds), and for each: plugin status ("Ready", "No plugin for this version", "Built locally on <date>"), plugin folder path
+  - what the plugin is and what it does / doesn't touch (not added to projects, loaded only while merging), with a "Learn more" link to the guide
+  - buttons: **Reinstall plugin** (copy the bundled one again), **Build plugin for this engine** (RunUAT BuildPlugin on the user's PC; check Visual Studio C++ first and say what is missing), **Open plugin folder**
+- [ ] **Conflict panel, Unreal card (merge time):** when the plugin is missing for the project's engine, say why (engine version / source build) and what happens instead (Unreal's keep-one-side window); offer **Build plugin for this engine** right there and a link to the guide. When it is ready, a short "uses the GitBlueprintMerge plugin (what it is)" line with the link.
+- [ ] **Set up repository for Unreal** (repo menu): preview the lines it will add to `.gitattributes` (LFS + `lockable` for `.uasset`/`.umap`) and `.gitignore` (`Binaries/`, `Intermediate/`, `Saved/`, `DerivedDataCache/`), add only missing lines, leave the commit to the user; link to the guide's repo section.
+- [ ] Guide: add stable anchors for these links and a section for "Build plugin for this engine".
 
 ## 1. Unreal merge: no silent losses (top priority)
 Background: the plugin snapshots each revision into facts and applies theirs onto a copy of ours. Anything not in the snapshot keeps ours without telling the user. See `docs/unreal-merge.md` ("Still not compared (silent)").

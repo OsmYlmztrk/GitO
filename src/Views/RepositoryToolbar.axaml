@@ -10,46 +10,46 @@
              x:DataType="vm:Repository">
   <UserControl.Styles>
     <!-- Fork-style toolbar button: icon on top, label below -->
-    <Style Selector="Button.tool">
+    <Style Selector=":is(Button).tool">
       <Setter Property="Background" Value="Transparent"/>
       <Setter Property="BorderThickness" Value="0"/>
       <Setter Property="CornerRadius" Value="5"/>
-      <Setter Property="Padding" Value="8,5"/>
-      <Setter Property="MinWidth" Value="54"/>
+      <Setter Property="Padding" Value="4,5"/>
+      <Setter Property="MinWidth" Value="42"/>
       <Setter Property="VerticalAlignment" Value="Center"/>
       <Setter Property="HorizontalContentAlignment" Value="Center"/>
     </Style>
-    <Style Selector="Button.tool /template/ ContentPresenter#PART_ContentPresenter">
+    <Style Selector=":is(Button).tool /template/ ContentPresenter#PART_ContentPresenter">
       <Setter Property="Background" Value="Transparent"/>
     </Style>
-    <Style Selector="Button.tool:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Style Selector=":is(Button).tool:pointerover /template/ ContentPresenter#PART_ContentPresenter">
       <Setter Property="Background" Value="{DynamicResource Brush.FlatButton.BackgroundHovered}"/>
     </Style>
-    <Style Selector="Button.tool:pressed /template/ ContentPresenter#PART_ContentPresenter">
+    <Style Selector=":is(Button).tool:pressed /template/ ContentPresenter#PART_ContentPresenter">
       <Setter Property="Background" Value="{DynamicResource Brush.FlatButton.FloatingBorder}"/>
     </Style>
-    <Style Selector="Button.tool Path.tool_icon">
+    <Style Selector=":is(Button).tool Path.tool_icon">
       <Setter Property="Width" Value="18"/>
       <Setter Property="Height" Value="18"/>
       <Setter Property="Fill" Value="{DynamicResource Brush.FG1}"/>
       <Setter Property="HorizontalAlignment" Value="Center"/>
     </Style>
-    <Style Selector="Button.tool TextBlock.tool_label">
+    <Style Selector=":is(Button).tool TextBlock.tool_label">
       <Setter Property="FontSize" Value="11"/>
       <Setter Property="Margin" Value="0,4,0,0"/>
       <Setter Property="Foreground" Value="{DynamicResource Brush.FG2}"/>
       <Setter Property="HorizontalAlignment" Value="Center"/>
     </Style>
-    <Style Selector="Button.tool:pointerover TextBlock.tool_label">
+    <Style Selector=":is(Button).tool:pointerover TextBlock.tool_label">
       <Setter Property="Foreground" Value="{DynamicResource Brush.FG1}"/>
     </Style>
-    <Style Selector="Button.tool:disabled Path.tool_icon">
+    <Style Selector=":is(Button).tool:disabled Path.tool_icon">
       <Setter Property="Fill" Value="{DynamicResource Brush.FG2}"/>
     </Style>
     <Style Selector="Rectangle.tool_sep">
       <Setter Property="Width" Value="1"/>
       <Setter Property="Height" Value="30"/>
-      <Setter Property="Margin" Value="6,0"/>
+      <Setter Property="Margin" Value="3,0"/>
       <Setter Property="VerticalAlignment" Value="Center"/>
       <Setter Property="Fill" Value="{DynamicResource Brush.Border2}"/>
     </Style>
@@ -62,17 +62,20 @@
       <Setter Property="VerticalAlignment" Value="Top"/>
       <Setter Property="Fill" Value="{DynamicResource Brush.Accent}"/>
     </Style>
-    <!-- Smaller variant for less frequent tools -->
-    <Style Selector="Button.tool.small">
-      <Setter Property="MinWidth" Value="44"/>
-      <Setter Property="Padding" Value="5,6,5,5"/>
+    <Style Selector="ToggleButton.tool:checked /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource Brush.FlatButton.FloatingBorder}"/>
     </Style>
-    <Style Selector="Button.tool.small Path.tool_icon">
+    <!-- Smaller variant for less frequent tools -->
+    <Style Selector=":is(Button).tool.small">
+      <Setter Property="MinWidth" Value="36"/>
+      <Setter Property="Padding" Value="3,6,3,5"/>
+    </Style>
+    <Style Selector=":is(Button).tool.small Path.tool_icon">
       <Setter Property="Width" Value="15"/>
       <Setter Property="Height" Value="15"/>
       <Setter Property="Margin" Value="0,1,0,2"/>
     </Style>
-    <Style Selector="Button.tool.small TextBlock.tool_label">
+    <Style Selector=":is(Button).tool.small TextBlock.tool_label">
       <Setter Property="FontSize" Value="10"/>
     </Style>
     <!-- Tooltips: title, what it does, shortcut -->
@@ -161,35 +164,6 @@
 
       <Rectangle Classes="tool_sep"/>
 
-      <Button Classes="tool" Tapped="StashAll" IsVisible="{Binding !IsBare}">
-        <ToolTip.Tip>
-          <StackPanel Classes="tip">
-            <TextBlock Classes="tip_title" Text="Stash (Kenara koy)"/>
-            <TextBlock Classes="tip_desc" Text="Commit'lenmemiş değişikliklerini kenara kaydeder ve çalışma alanını temizler. Sonra Stashes'tan geri alabilirsin."/>
-            <TextBlock Classes="tip_key" Text="Ctrl ile tıklarsan pencere açmadan doğrudan başlar"/>
-          </StackPanel>
-        </ToolTip.Tip>
-        <StackPanel>
-          <Path Classes="tool_icon" Data="{StaticResource Icons.Stashes.Add}"/>
-          <TextBlock Classes="tool_label" Text="{DynamicResource Text.Stash}"/>
-        </StackPanel>
-      </Button>
-
-      <Button Classes="tool" Command="{Binding ApplyPatch}" IsVisible="{Binding !IsBare}">
-        <ToolTip.Tip>
-          <StackPanel Classes="tip">
-            <TextBlock Classes="tip_title" Text="Yama uygula"/>
-            <TextBlock Classes="tip_desc" Text="Bir .patch / .diff dosyasını çalışma alanına uygular."/>
-          </StackPanel>
-        </ToolTip.Tip>
-        <StackPanel>
-          <Path Classes="tool_icon" Data="{StaticResource Icons.ApplyPatch}"/>
-          <TextBlock Classes="tool_label" Text="Patch"/>
-        </StackPanel>
-      </Button>
-
-      <Rectangle Classes="tool_sep"/>
-
       <Button Classes="tool" Command="{Binding CreateNewBranch}" HotKey="{OnPlatform Ctrl+B, macOS=⌘+B}">
         <ToolTip.Tip>
           <StackPanel Classes="tip">
@@ -204,113 +178,160 @@
         </StackPanel>
       </Button>
 
-      <Button Classes="tool" Click="OpenTerminal">
-        <ToolTip.Tip>
-          <StackPanel Classes="tip">
-            <TextBlock Classes="tip_title" Text="Terminalde aç"/>
-            <TextBlock Classes="tip_desc" Text="Repo klasöründe bir terminal açar (kabuk Preferences ayarlarından seçilir)."/>
-            <TextBlock Classes="tip_key" Text="{OnPlatform Ctrl+`, macOS=⌃+`}"/>
-          </StackPanel>
-        </ToolTip.Tip>
-        <StackPanel>
-          <Path Classes="tool_icon" Data="{StaticResource Icons.Terminal}"/>
-          <TextBlock Classes="tool_label" Text="Terminal"/>
-        </StackPanel>
-      </Button>
-
       <Rectangle Classes="tool_sep"/>
 
-      <!-- Less frequent tools: smaller icons, still labeled -->
-      <Button Classes="tool small" Click="OpenGitLFSMenu" IsVisible="{Binding !IsBare}">
+      <!-- MyGitGUI: less used tools live in a panel that this toggle shows and hides -->
+      <ToggleButton x:Name="MoreToolsToggle" Classes="tool">
         <ToolTip.Tip>
           <StackPanel Classes="tip">
-            <TextBlock Classes="tip_title" Text="Git LFS (büyük dosyalar)"/>
-            <TextBlock Classes="tip_desc" Text="Büyük dosyalar: dosya kalıplarını takibe alır, LFS nesnelerini fetch / pull / push eder, yerel önbelleği temizler ve dosya kilitlerini yönetir."/>
+            <TextBlock Classes="tip_title" Text="Diğer araçlar"/>
+            <TextBlock Classes="tip_desc" Text="Stash, Patch, Terminal, LFS, Git-Flow, Bisect, Actions, Cleanup, Logs ve Stats düğmelerini gösterir ya da gizler."/>
           </StackPanel>
         </ToolTip.Tip>
         <StackPanel>
-          <Path Classes="tool_icon" Data="{StaticResource Icons.LFS}"/>
-          <TextBlock Classes="tool_label" Text="LFS"/>
+          <Path Classes="tool_icon" Data="{StaticResource Icons.More}"/>
+          <TextBlock Classes="tool_label" Text="More"/>
         </StackPanel>
-      </Button>
+      </ToggleButton>
 
-      <Button Classes="tool small" Click="OpenGitFlowMenu" IsVisible="{Binding !IsBare}">
-        <ToolTip.Tip>
-          <StackPanel Classes="tip">
-            <TextBlock Classes="tip_title" Text="Git-Flow"/>
-            <TextBlock Classes="tip_desc" Text="git-flow iş akışıyla feature, release ve hotfix branch'lerini başlatır ve bitirir."/>
+      <StackPanel Orientation="Horizontal" IsVisible="{Binding #MoreToolsToggle.IsChecked}">
+        <Button Classes="tool" Tapped="StashAll" IsVisible="{Binding !IsBare}">
+          <ToolTip.Tip>
+            <StackPanel Classes="tip">
+              <TextBlock Classes="tip_title" Text="Stash (Kenara koy)"/>
+              <TextBlock Classes="tip_desc" Text="Commit'lenmemiş değişikliklerini kenara kaydeder ve çalışma alanını temizler. Sonra Stashes'tan geri alabilirsin."/>
+              <TextBlock Classes="tip_key" Text="Ctrl ile tıklarsan pencere açmadan doğrudan başlar"/>
+            </StackPanel>
+          </ToolTip.Tip>
+          <StackPanel>
+            <Path Classes="tool_icon" Data="{StaticResource Icons.Stashes.Add}"/>
+            <TextBlock Classes="tool_label" Text="{DynamicResource Text.Stash}"/>
           </StackPanel>
-        </ToolTip.Tip>
-        <StackPanel>
-          <Path Classes="tool_icon" Data="{StaticResource Icons.GitFlow}"/>
-          <TextBlock Classes="tool_label" Text="Git-Flow"/>
-        </StackPanel>
-      </Button>
+        </Button>
 
-      <Button Classes="tool small" Click="StartBisect" IsVisible="{Binding !IsBare}">
-        <ToolTip.Tip>
-          <StackPanel Classes="tip">
-            <TextBlock Classes="tip_title" Text="Bisect (hatalı commit'i bul)"/>
-            <TextBlock Classes="tip_desc" Text="Hatayı getiren commit'i bulur: commit'leri iyi ya da kötü diye işaretlersin, git aralığı her seferinde ikiye bölerek tek commit kalana kadar daraltır."/>
+        <Button Classes="tool" Command="{Binding ApplyPatch}" IsVisible="{Binding !IsBare}">
+          <ToolTip.Tip>
+            <StackPanel Classes="tip">
+              <TextBlock Classes="tip_title" Text="Yama uygula"/>
+              <TextBlock Classes="tip_desc" Text="Bir .patch / .diff dosyasını çalışma alanına uygular."/>
+            </StackPanel>
+          </ToolTip.Tip>
+          <StackPanel>
+            <Path Classes="tool_icon" Data="{StaticResource Icons.ApplyPatch}"/>
+            <TextBlock Classes="tool_label" Text="Patch"/>
           </StackPanel>
-        </ToolTip.Tip>
-        <StackPanel>
-          <Path Classes="tool_icon" Data="{StaticResource Icons.Bisect}"/>
-          <TextBlock Classes="tool_label" Text="Bisect"/>
-        </StackPanel>
-      </Button>
+        </Button>
 
-      <Button Classes="tool small" Click="OpenCustomActionMenu">
-        <ToolTip.Tip>
-          <StackPanel Classes="tip">
-            <TextBlock Classes="tip_title" Text="Özel komutlar"/>
-            <TextBlock Classes="tip_desc" Text="Bu repo için kendi komutlarını ya da script'lerini çalıştırır. Tanımlamak için: Configure this repository › Custom Action."/>
-          </StackPanel>
-        </ToolTip.Tip>
-        <StackPanel>
-          <Path Classes="tool_icon" Data="{StaticResource Icons.Action}"/>
-          <TextBlock Classes="tool_label" Text="Actions"/>
-        </StackPanel>
-      </Button>
+        <Rectangle Classes="tool_sep"/>
 
-      <Button Classes="tool small" Click="Cleanup">
-        <ToolTip.Tip>
-          <StackPanel Classes="tip">
-            <TextBlock Classes="tip_title" Text="Temizlik (GC ve Prune)"/>
-            <TextBlock Classes="tip_desc" Text="git gc ve prune çalıştırır: repoyu sıkıştırır, artık erişilemeyen nesneleri siler. Büyük repolarda uzun sürebilir."/>
+        <Button Classes="tool" Click="OpenTerminal">
+          <ToolTip.Tip>
+            <StackPanel Classes="tip">
+              <TextBlock Classes="tip_title" Text="Terminalde aç"/>
+              <TextBlock Classes="tip_desc" Text="Repo klasöründe bir terminal açar (kabuk Preferences ayarlarından seçilir)."/>
+              <TextBlock Classes="tip_key" Text="{OnPlatform Ctrl+`, macOS=⌃+`}"/>
+            </StackPanel>
+          </ToolTip.Tip>
+          <StackPanel>
+            <Path Classes="tool_icon" Data="{StaticResource Icons.Terminal}"/>
+            <TextBlock Classes="tool_label" Text="Terminal"/>
           </StackPanel>
-        </ToolTip.Tip>
-        <StackPanel>
-          <Path Classes="tool_icon" Data="{StaticResource Icons.Clean}"/>
-          <TextBlock Classes="tool_label" Text="Cleanup"/>
-        </StackPanel>
-      </Button>
+        </Button>
 
-      <Button Classes="tool small" Click="OpenGitLogs">
-        <ToolTip.Tip>
-          <StackPanel Classes="tip">
-            <TextBlock Classes="tip_title" Text="Komut kayıtları"/>
-            <TextBlock Classes="tip_desc" Text="Uygulamanın bu repoda çalıştırdığı git komutlarını ve çıktılarını gösterir. Bir şey ters gittiğinde işe yarar."/>
-          </StackPanel>
-        </ToolTip.Tip>
-        <StackPanel>
-          <Path Classes="tool_icon" Data="{StaticResource Icons.Logs}"/>
-          <TextBlock Classes="tool_label" Text="Logs"/>
-        </StackPanel>
-      </Button>
+        <Rectangle Classes="tool_sep"/>
 
-      <Button Classes="tool small" Click="OpenStatistics">
-        <ToolTip.Tip>
-          <StackPanel Classes="tip">
-            <TextBlock Classes="tip_title" Text="İstatistikler"/>
-            <TextBlock Classes="tip_desc" Text="Yazara ve zamana göre (hafta, ay, yıl) commit istatistikleri."/>
+        <!-- Less frequent tools: smaller icons, still labeled -->
+        <Button Classes="tool small" Click="OpenGitLFSMenu" IsVisible="{Binding !IsBare}">
+          <ToolTip.Tip>
+            <StackPanel Classes="tip">
+              <TextBlock Classes="tip_title" Text="Git LFS (büyük dosyalar)"/>
+              <TextBlock Classes="tip_desc" Text="Büyük dosyalar: dosya kalıplarını takibe alır, LFS nesnelerini fetch / pull / push eder, yerel önbelleği temizler ve dosya kilitlerini yönetir."/>
+            </StackPanel>
+          </ToolTip.Tip>
+          <StackPanel>
+            <Path Classes="tool_icon" Data="{StaticResource Icons.LFS}"/>
+            <TextBlock Classes="tool_label" Text="LFS"/>
           </StackPanel>
-        </ToolTip.Tip>
-        <StackPanel>
-          <Path Classes="tool_icon" Data="{StaticResource Icons.Statistics}"/>
-          <TextBlock Classes="tool_label" Text="Stats"/>
-        </StackPanel>
-      </Button>
+        </Button>
+
+        <Button Classes="tool small" Click="OpenGitFlowMenu" IsVisible="{Binding !IsBare}">
+          <ToolTip.Tip>
+            <StackPanel Classes="tip">
+              <TextBlock Classes="tip_title" Text="Git-Flow"/>
+              <TextBlock Classes="tip_desc" Text="git-flow iş akışıyla feature, release ve hotfix branch'lerini başlatır ve bitirir."/>
+            </StackPanel>
+          </ToolTip.Tip>
+          <StackPanel>
+            <Path Classes="tool_icon" Data="{StaticResource Icons.GitFlow}"/>
+            <TextBlock Classes="tool_label" Text="Git-Flow"/>
+          </StackPanel>
+        </Button>
+
+        <Button Classes="tool small" Click="StartBisect" IsVisible="{Binding !IsBare}">
+          <ToolTip.Tip>
+            <StackPanel Classes="tip">
+              <TextBlock Classes="tip_title" Text="Bisect (hatalı commit'i bul)"/>
+              <TextBlock Classes="tip_desc" Text="Hatayı getiren commit'i bulur: commit'leri iyi ya da kötü diye işaretlersin, git aralığı her seferinde ikiye bölerek tek commit kalana kadar daraltır."/>
+            </StackPanel>
+          </ToolTip.Tip>
+          <StackPanel>
+            <Path Classes="tool_icon" Data="{StaticResource Icons.Bisect}"/>
+            <TextBlock Classes="tool_label" Text="Bisect"/>
+          </StackPanel>
+        </Button>
+
+        <Button Classes="tool small" Click="OpenCustomActionMenu">
+          <ToolTip.Tip>
+            <StackPanel Classes="tip">
+              <TextBlock Classes="tip_title" Text="Özel komutlar"/>
+              <TextBlock Classes="tip_desc" Text="Bu repo için kendi komutlarını ya da script'lerini çalıştırır. Tanımlamak için: Configure this repository › Custom Action."/>
+            </StackPanel>
+          </ToolTip.Tip>
+          <StackPanel>
+            <Path Classes="tool_icon" Data="{StaticResource Icons.Action}"/>
+            <TextBlock Classes="tool_label" Text="Actions"/>
+          </StackPanel>
+        </Button>
+
+        <Button Classes="tool small" Click="Cleanup">
+          <ToolTip.Tip>
+            <StackPanel Classes="tip">
+              <TextBlock Classes="tip_title" Text="Temizlik (GC ve Prune)"/>
+              <TextBlock Classes="tip_desc" Text="git gc ve prune çalıştırır: repoyu sıkıştırır, artık erişilemeyen nesneleri siler. Büyük repolarda uzun sürebilir."/>
+            </StackPanel>
+          </ToolTip.Tip>
+          <StackPanel>
+            <Path Classes="tool_icon" Data="{StaticResource Icons.Clean}"/>
+            <TextBlock Classes="tool_label" Text="Cleanup"/>
+          </StackPanel>
+        </Button>
+
+        <Button Classes="tool small" Click="OpenGitLogs">
+          <ToolTip.Tip>
+            <StackPanel Classes="tip">
+              <TextBlock Classes="tip_title" Text="Komut kayıtları"/>
+              <TextBlock Classes="tip_desc" Text="Uygulamanın bu repoda çalıştırdığı git komutlarını ve çıktılarını gösterir. Bir şey ters gittiğinde işe yarar."/>
+            </StackPanel>
+          </ToolTip.Tip>
+          <StackPanel>
+            <Path Classes="tool_icon" Data="{StaticResource Icons.Logs}"/>
+            <TextBlock Classes="tool_label" Text="Logs"/>
+          </StackPanel>
+        </Button>
+
+        <Button Classes="tool small" Click="OpenStatistics">
+          <ToolTip.Tip>
+            <StackPanel Classes="tip">
+              <TextBlock Classes="tip_title" Text="İstatistikler"/>
+              <TextBlock Classes="tip_desc" Text="Yazara ve zamana göre (hafta, ay, yıl) commit istatistikleri."/>
+            </StackPanel>
+          </ToolTip.Tip>
+          <StackPanel>
+            <Path Classes="tool_icon" Data="{StaticResource Icons.Statistics}"/>
+            <TextBlock Classes="tool_label" Text="Stats"/>
+          </StackPanel>
+        </Button>
+      </StackPanel>
     </StackPanel>
 
     <StackPanel Grid.Column="2" Orientation="Horizontal">

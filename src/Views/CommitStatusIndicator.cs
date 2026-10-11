@@ -45,12 +45,33 @@ namespace SourceGit.Views
             Behind,
         }
 
+        // MyGitGUI: draw a 14px badge with an arrow instead of a 5px dot, so unpushed (filled ↑)
+        // and unpulled (outlined ↓) commits stand out in the history list.
         public override void Render(DrawingContext context)
         {
             if (_status == Status.Normal)
                 return;
 
-            context.DrawEllipse(_status == Status.Ahead ? AheadBrush : BehindBrush, null, new Rect(0, 0, 5, 5));
+            var box = new Rect(0.5, 0.5, BadgeSize - 1, BadgeSize - 1);
+            var mid = BadgeSize * 0.5;
+            if (_status == Status.Ahead)
+            {
+                context.DrawRectangle(AheadBrush, null, box, 3, 3);
+
+                var pen = new Pen(Brushes.White, 1.5, null, PenLineCap.Round, PenLineJoin.Round);
+                context.DrawLine(pen, new Point(mid, 3.5), new Point(mid, 10.5));
+                context.DrawLine(pen, new Point(mid - 3, 6.5), new Point(mid, 3.5));
+                context.DrawLine(pen, new Point(mid + 3, 6.5), new Point(mid, 3.5));
+            }
+            else
+            {
+                context.DrawRectangle(null, new Pen(BehindBrush, 1), box, 3, 3);
+
+                var pen = new Pen(BehindBrush, 1.5, null, PenLineCap.Round, PenLineJoin.Round);
+                context.DrawLine(pen, new Point(mid, 3.5), new Point(mid, 10.5));
+                context.DrawLine(pen, new Point(mid - 3, 7.5), new Point(mid, 10.5));
+                context.DrawLine(pen, new Point(mid + 3, 7.5), new Point(mid, 10.5));
+            }
         }
 
         protected override Size MeasureOverride(Size availableSize)
@@ -71,8 +92,18 @@ namespace SourceGit.Views
                 _status = Status.Normal;
             }
 
-            return _status == Status.Normal ? new Size(0, 0) : new Size(9, 5);
+            // MyGitGUI: badge size + tooltip
+            ToolTip.SetTip(this, _status switch
+            {
+                Status.Ahead => "Not pushed yet",
+                Status.Behind => "Not pulled yet",
+                _ => null,
+            });
+
+            return _status == Status.Normal ? new Size(0, 0) : new Size(BadgeSize + 4, BadgeSize);
         }
+
+        private const double BadgeSize = 14;
 
         protected override void OnDataContextChanged(EventArgs e)
         {

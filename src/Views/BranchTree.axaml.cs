@@ -546,88 +546,75 @@ namespace SourceGit.Views
             if (DataContext is not ViewModels.Repository { IsBare: false } repo || FindDropSource(e, target) is not { } source)
                 return;
 
+            // The dragged branch is always the source and the drop target is always the target:
+            // merge brings the source into the target, rebase moves the source onto the target.
             var menu = new ContextMenu();
 
+            var merge = new MenuItem();
+            merge.Icon = this.CreateMenuIcon("Icons.Merge");
             if (target.IsCurrent)
             {
-                var merge = new MenuItem();
                 merge.Header = App.Text("BranchCM.Merge", source.FriendlyName, target.Name);
-                merge.Icon = this.CreateMenuIcon("Icons.Merge");
                 merge.Click += (_, ev) =>
                 {
                     if (repo.CanCreatePopup())
                         repo.ShowPopup(new ViewModels.Merge(repo, source, target.Name, false));
                     ev.Handled = true;
                 };
-
-                var rebase = new MenuItem();
-                rebase.Header = App.Text("BranchCM.Rebase", target.Name, source.FriendlyName);
-                rebase.Icon = this.CreateMenuIcon("Icons.Rebase");
-                rebase.Click += (_, ev) =>
-                {
-                    if (repo.CanCreatePopup())
-                        repo.ShowPopup(new ViewModels.Rebase(repo, target, source));
-                    ev.Handled = true;
-                };
-
-                menu.Items.Add(merge);
-                menu.Items.Add(rebase);
             }
             else
             {
-                var checkoutAndMerge = new MenuItem();
-                checkoutAndMerge.Header = $"Checkout '{target.Name}' and merge '{source.FriendlyName}' into it...";
-                checkoutAndMerge.Icon = this.CreateMenuIcon("Icons.Merge");
-                checkoutAndMerge.Click += async (_, ev) =>
+                merge.Header = $"Checkout ${target.Name}$ and merge ${source.FriendlyName}$ into it...";
+                merge.Click += async (_, ev) =>
                 {
                     ev.Handled = true;
-                    await CheckoutThenMergeAsync(repo, target, source);
+                    await CheckoutThenAsync(repo, target, current => new ViewModels.Merge(repo, source, current.Name, false));
                 };
-                menu.Items.Add(checkoutAndMerge);
+            }
+            menu.Items.Add(merge);
 
+            // Rebase rewrites the source branch, so only a local source can be rebased.
+            if (source.IsLocal)
+            {
+                var rebase = new MenuItem();
+                rebase.Icon = this.CreateMenuIcon("Icons.Rebase");
                 if (source.IsCurrent)
                 {
-                    var mergeIntoCurrent = new MenuItem();
-                    mergeIntoCurrent.Header = App.Text("BranchCM.Merge", target.Name, source.Name);
-                    mergeIntoCurrent.Icon = this.CreateMenuIcon("Icons.Merge");
-                    mergeIntoCurrent.Click += (_, ev) =>
-                    {
-                        if (repo.CanCreatePopup())
-                            repo.ShowPopup(new ViewModels.Merge(repo, target, source.Name, false));
-                        ev.Handled = true;
-                    };
-
-                    var rebaseCurrent = new MenuItem();
-                    rebaseCurrent.Header = App.Text("BranchCM.Rebase", source.Name, target.Name);
-                    rebaseCurrent.Icon = this.CreateMenuIcon("Icons.Rebase");
-                    rebaseCurrent.Click += (_, ev) =>
+                    rebase.Header = App.Text("BranchCM.Rebase", source.Name, target.Name);
+                    rebase.Click += (_, ev) =>
                     {
                         if (repo.CanCreatePopup())
                             repo.ShowPopup(new ViewModels.Rebase(repo, source, target));
                         ev.Handled = true;
                     };
-
-                    menu.Items.Add(new MenuItem() { Header = "-" });
-                    menu.Items.Add(mergeIntoCurrent);
-                    menu.Items.Add(rebaseCurrent);
                 }
+                else
+                {
+                    rebase.Header = $"Checkout ${source.Name}$ and rebase it on ${target.Name}$...";
+                    rebase.Click += async (_, ev) =>
+                    {
+                        ev.Handled = true;
+                        await CheckoutThenAsync(repo, source, current => new ViewModels.Rebase(repo, current, target));
+                    };
+                }
+                menu.Items.Add(rebase);
             }
 
             menu.Open(border);
         }
 
-        private static async Task CheckoutThenMergeAsync(ViewModels.Repository repo, Models.Branch target, Models.Branch source)
+        private static async Task CheckoutThenAsync(ViewModels.Repository repo, Models.Branch branch, Func<Models.Branch, ViewModels.Popup> next)
         {
-            await repo.CheckoutBranchAsync(target);
+            await repo.CheckoutBranchAsync(branch);
 
             // Checkout runs as a popup; wait briefly for HEAD to move. If it needs user input
-            // (e.g. local changes), the merge step is skipped and the user can drag again.
+            // (e.g. local changes), the next step is skipped and the user can drag again.
             for (var i = 0; i < 50; i++)
             {
-                if (repo.CurrentBranch is { } current && current.FullName.Equals(target.FullName, StringComparison.Ordinal))
+                if (repo.CurrentBranch is { } current && current.FullName.Equals(branch.FullName, StringComparison.Ordinal))
                 {
                     if (repo.CanCreatePopup())
-                        repo.ShowPopup(new ViewModels.Merge(repo, source, current.Name, false));
+                        repo.ShowPopup(next(current));
                     return;
                 }
 
