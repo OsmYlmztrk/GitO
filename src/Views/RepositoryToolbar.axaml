@@ -341,6 +341,29 @@
     </StackPanel>
 
     <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center">
+      <!-- MyGitGUI: active git account; shown only when accounts are set up in Preferences -->
+      <Button x:Name="AccountButton"
+              Height="28" MaxWidth="180"
+              Margin="0,0,8,0" Padding="10,0"
+              CornerRadius="5"
+              BorderThickness="1"
+              BorderBrush="{DynamicResource Brush.Border2}"
+              Background="{DynamicResource Brush.Contents}"
+              IsVisible="False"
+              Click="OpenAccountMenu">
+        <ToolTip.Tip>
+          <StackPanel Classes="tip">
+            <TextBlock Classes="tip_title" Text="Git hesabı"/>
+            <TextBlock x:Name="AccountTipDetail" Classes="tip_desc"/>
+            <TextBlock Classes="tip_desc" Text="Tıklayınca bu repo için hesap seçersin: commit yazarı (user.name / user.email) ve push / pull girişi değişir."/>
+          </StackPanel>
+        </ToolTip.Tip>
+        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+          <Path Width="12" Height="12" Data="{StaticResource Icons.User}" Fill="{DynamicResource Brush.FG1}"/>
+          <TextBlock x:Name="AccountLabel" Margin="6,0,0,0" TextTrimming="CharacterEllipsis"/>
+        </StackPanel>
+      </Button>
+
       <!-- Current branch pill -->
       <Button Height="28" MaxWidth="260"
               Padding="10,0"

@@ -452,6 +452,128 @@
           </Grid>
         </TabItem>
 
+        <!-- MyGitGUI: git accounts to switch between -->
+        <TabItem>
+          <TabItem.Header>
+            <TextBlock Classes="tab_header" Text="Accounts"/>
+          </TabItem.Header>
+
+          <Grid Margin="0,8,0,16" MinHeight="360" RowDefinitions="Auto,*">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="200"/>
+              <ColumnDefinition Width="*" MaxWidth="400"/>
+            </Grid.ColumnDefinitions>
+
+            <TextBlock Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="2"
+                       Margin="0,0,0,8" MaxWidth="600" HorizontalAlignment="Left"
+                       TextWrapping="Wrap"
+                       Foreground="{DynamicResource Brush.FG2}"
+                       Text="Optional. GitHub logins saved in Git Credential Manager are added automatically; add others with +. Pick one as the global default here or per repository with the account button in the toolbar. Using an account sets user.name, user.email and the login Git Credential Manager uses for push and pull."/>
+
+            <Border Grid.Row="1" Grid.Column="0"
+                    BorderThickness="1" BorderBrush="{DynamicResource Brush.Border2}"
+                    Background="{DynamicResource Brush.Contents}">
+              <Grid RowDefinitions="*,1,Auto">
+                <ListBox Grid.Row="0"
+                         Background="Transparent"
+                         ItemsSource="{Binding GitAccounts}"
+                         SelectedItem="{Binding #ThisControl.SelectedGitAccount, Mode=TwoWay}"
+                         SelectionMode="Single">
+                  <ListBox.Styles>
+                    <Style Selector="ListBoxItem">
+                      <Setter Property="MinHeight" Value="0"/>
+                      <Setter Property="Height" Value="26"/>
+                      <Setter Property="Padding" Value="4,2"/>
+                    </Style>
+                  </ListBox.Styles>
+
+                  <ListBox.ItemsPanel>
+                    <ItemsPanelTemplate>
+                      <StackPanel Orientation="Vertical"/>
+                    </ItemsPanelTemplate>
+                  </ListBox.ItemsPanel>
+
+                  <ListBox.ItemTemplate>
+                    <DataTemplate DataType="m:GitAccount">
+                      <Grid ColumnDefinitions="Auto,*">
+                        <Path Grid.Column="0" Width="12" Height="12" Data="{StaticResource Icons.User}"/>
+                        <TextBlock Grid.Column="1" Text="{Binding DisplayName}" Margin="8,0" TextTrimming="CharacterEllipsis"/>
+                      </Grid>
+                    </DataTemplate>
+                  </ListBox.ItemTemplate>
+                </ListBox>
+
+                <Rectangle Grid.Row="1" Height="1" Fill="{DynamicResource Brush.Border2}" HorizontalAlignment="Stretch" VerticalAlignment="Bottom"/>
+
+                <StackPanel Grid.Row="2" Orientation="Horizontal" Background="{DynamicResource Brush.ToolBar}">
+                  <Button Classes="icon_button" Click="OnAddGitAccount" ToolTip.Tip="Add account">
+                    <Path Width="14" Height="14" Data="{StaticResource Icons.Plus}"/>
+                  </Button>
+
+                  <Button Classes="icon_button" Click="OnRemoveSelectedGitAccount" ToolTip.Tip="Remove account">
+                    <Path Width="14" Height="14" Data="{StaticResource Icons.Minus}"/>
+                  </Button>
+
+                  <Button Classes="icon_button" Click="OnImportSavedGitAccounts" ToolTip.Tip="Add the logins saved in Git Credential Manager">
+                    <Path Width="14" Height="14" Data="{StaticResource Icons.Fetch}"/>
+                  </Button>
+                </StackPanel>
+              </Grid>
+            </Border>
+
+            <ContentControl Grid.Row="1" Grid.Column="1" Margin="16,0,0,0">
+              <ContentControl.Content>
+                <Binding Path="#ThisControl.SelectedGitAccount">
+                  <Binding.TargetNullValue>
+                    <Path Width="64" Height="64"
+                          HorizontalAlignment="Center"
+                          VerticalAlignment="Center"
+                          Fill="{DynamicResource Brush.FG2}"
+                          Data="{StaticResource Icons.Empty}"/>
+                  </Binding.TargetNullValue>
+                </Binding>
+              </ContentControl.Content>
+
+              <ContentControl.DataTemplates>
+                <DataTemplate DataType="m:GitAccount">
+                  <StackPanel Orientation="Vertical" MaxWidth="680">
+                    <TextBlock Text="Display name"/>
+                    <TextBox Margin="0,4,0,0" CornerRadius="3" Height="28" Text="{Binding Name, Mode=TwoWay}" Watermark="e.g. Personal, Work"/>
+
+                    <TextBlock Margin="0,12,0,0" Text="User name (user.name)"/>
+                    <TextBox Margin="0,4,0,0" CornerRadius="3" Height="28" Text="{Binding UserName, Mode=TwoWay}"/>
+
+                    <TextBlock Margin="0,12,0,0" Text="Email (user.email)"/>
+                    <TextBox Margin="0,4,0,0" CornerRadius="3" Height="28" Text="{Binding Email, Mode=TwoWay}"/>
+
+                    <TextBlock Margin="0,12,0,0" Text="Login for push and pull"/>
+                    <TextBox Margin="0,4,0,0" CornerRadius="3" Height="28" Text="{Binding CredentialUser, Mode=TwoWay}" Watermark="e.g. your GitHub user name"/>
+                    <TextBlock Margin="0,4,0,0"
+                               FontSize="11"
+                               TextWrapping="Wrap"
+                               Foreground="{DynamicResource Brush.FG2}"
+                               Text="Git Credential Manager uses the saved login with this name. Leave empty to let it ask."/>
+
+                    <TextBlock Margin="0,12,0,0" Text="Host"/>
+                    <TextBox Margin="0,4,0,0" CornerRadius="3" Height="28" Text="{Binding Host, Mode=TwoWay}" Watermark="github.com"/>
+
+                    <Button Margin="0,16,0,0"
+                            Height="28" Padding="12,0"
+                            HorizontalAlignment="Left"
+                            Content="Use as global default"
+                            Click="OnUseGitAccountAsGlobal"/>
+                    <TextBlock Margin="0,6,0,0"
+                               FontSize="11"
+                               TextWrapping="Wrap"
+                               Foreground="{DynamicResource Brush.FG2}"
+                               Text="Writes these values to your global git config. Repositories with their own account keep it."/>
+                  </StackPanel>
+                </DataTemplate>
+              </ContentControl.DataTemplates>
+            </ContentControl>
+          </Grid>
+        </TabItem>
+
         <TabItem>
           <TabItem.Header>
             <TextBlock Classes="tab_header" Text="{DynamicResource Text.Preferences.GPG}"/>

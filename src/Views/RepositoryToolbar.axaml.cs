@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.Specialized;
 using System.IO;
 
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
@@ -16,6 +18,118 @@ namespace SourceGit.Views
         public RepositoryToolbar()
         {
             InitializeComponent();
+            AccountButton.PointerEntered += (_, _) => RefreshAccount();
+        }
+
+        // MyGitGUI: active git account button
+        protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
+        {
+            base.OnAttachedToVisualTree(e);
+            ViewModels.Preferences.Instance.GitAccounts.CollectionChanged += OnGitAccountsChanged;
+            RefreshAccount();
+        }
+
+        protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
+        {
+            ViewModels.Preferences.Instance.GitAccounts.CollectionChanged -= OnGitAccountsChanged;
+            base.OnDetachedFromVisualTree(e);
+        }
+
+        protected override void OnDataContextChanged(EventArgs e)
+        {
+            base.OnDataContextChanged(e);
+            RefreshAccount();
+        }
+
+        private void OnGitAccountsChanged(object sender, NotifyCollectionChangedEventArgs e)
+        {
+            RefreshAccount();
+        }
+
+        private async void RefreshAccount()
+        {
+            var version = ++_accountRefreshVersion;
+            if (DataContext is not ViewModels.Repository repo || ViewModels.Preferences.Instance.GitAccounts.Count == 0)
+            {
+                AccountButton.IsVisible = false;
+                return;
+            }
+
+            var active = await ViewModels.GitAccounts.FindAsync(repo.FullPath);
+            if (version != _accountRefreshVersion)
+                return;
+
+            var scope = active.IsRepositorySpecific ? "bu repoya özel" : "global varsayılan";
+            if (active.Account != null)
+            {
+                AccountLabel.Text = active.Account.DisplayName;
+                AccountTipDetail.Text = $"Aktif: {active.Account.DisplayName} <{active.Email}> ({scope})";
+            }
+            else
+            {
+                AccountLabel.Text = string.IsNullOrEmpty(active.UserName) ? "No account" : active.UserName;
+                AccountTipDetail.Text = string.IsNullOrEmpty(active.Email)
+                    ? "Kimlik ayarlı değil."
+                    : $"Aktif: {active.UserName} <{active.Email}> ({scope}); listedeki hesaplarla eşleşmiyor.";
+            }
+
+            AccountButton.IsVisible = true;
+        }
+
+        private async void OpenAccountMenu(object sender, RoutedEventArgs ev)
+        {
+            ev.Handled = true;
+            if (DataContext is not ViewModels.Repository repo || sender is not Control control)
+                return;
+
+            var accounts = ViewModels.Preferences.Instance.GitAccounts;
+            var active = await ViewModels.GitAccounts.FindAsync(repo.FullPath);
+            var global = await ViewModels.GitAccounts.FindAsync(null);
+
+            var menu = new ContextMenu();
+            menu.Placement = PlacementMode.BottomEdgeAlignedRight;
+
+            foreach (var account in accounts)
+            {
+                var item = new MenuItem();
+                item.Header = string.IsNullOrWhiteSpace(account.Email) ? account.DisplayName : $"{account.DisplayName}  <{account.Email.Trim()}>";
+                if (active.IsRepositorySpecific && active.Account == account)
+                    item.Icon = this.CreateMenuIcon("Icons.Check");
+                item.IsEnabled = !string.IsNullOrWhiteSpace(account.UserName) && !string.IsNullOrWhiteSpace(account.Email);
+                item.Click += async (_, e) =>
+                {
+                    e.Handled = true;
+                    await new Commands.GitAccountConfig(repo.FullPath).ApplyAsync(account);
+                    RefreshAccount();
+                };
+                menu.Items.Add(item);
+            }
+
+            var useGlobal = new MenuItem();
+            useGlobal.Header = global.Account != null ? $"Use global default ({global.Account.DisplayName})" : "Use global default";
+            if (!active.IsRepositorySpecific)
+                useGlobal.Icon = this.CreateMenuIcon("Icons.Check");
+            useGlobal.Click += async (_, e) =>
+            {
+                e.Handled = true;
+                await new Commands.GitAccountConfig(repo.FullPath).ClearAsync(accounts);
+                RefreshAccount();
+            };
+            menu.Items.Add(new MenuItem() { Header = "-" });
+            menu.Items.Add(useGlobal);
+
+            var manage = new MenuItem();
+            manage.Header = "Manage accounts...";
+            manage.Icon = this.CreateMenuIcon("Icons.Settings");
+            manage.Click += (_, e) =>
+            {
+                e.Handled = true;
+                App.OpenPreferencesCommand.Execute(null);
+            };
+            menu.Items.Add(new MenuItem() { Header = "-" });
+            menu.Items.Add(manage);
+
+            menu.Open(control);
         }
 
         private void OpenWithExternalTools(object sender, RoutedEventArgs ev)
@@ -526,7 +640,10 @@ namespace SourceGit.Views
         {
             e.Handled = true;
             if (DataContext is ViewModels.Repository repo)
+            {
                 await this.ShowDialogAsync(new ViewModels.RepositoryConfigure(repo));
+                RefreshAccount(); // MyGitGUI: the dialog can change user.name / user.email
+            }
         }
 
         private void OpenTerminal(object sender, RoutedEventArgs e)
@@ -556,5 +673,7 @@ namespace SourceGit.Views
                 e.Handled = true;
             }
         }
+
+        private int _accountRefreshVersion = 0;
     }
 }

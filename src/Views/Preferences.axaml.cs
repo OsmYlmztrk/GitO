@@ -33,16 +33,41 @@ namespace SourceGit.Views
             set => SetAndRaise(ShowGitVersionWarningProperty, ref _showGitVersionWarning, value);
         }
 
+        // MyGitGUI: DefaultUser/DefaultEmail notify, so "Use as global default" (Accounts page) updates the Git page.
+        public static readonly DirectProperty<Preferences, string> DefaultUserProperty =
+            AvaloniaProperty.RegisterDirect<Preferences, string>(
+                nameof(DefaultUser),
+                static o => o.DefaultUser,
+                static (o, v) => o.DefaultUser = v);
+
         public string DefaultUser
         {
-            get;
-            set;
+            get => _defaultUser;
+            set => SetAndRaise(DefaultUserProperty, ref _defaultUser, value);
         }
+
+        public static readonly DirectProperty<Preferences, string> DefaultEmailProperty =
+            AvaloniaProperty.RegisterDirect<Preferences, string>(
+                nameof(DefaultEmail),
+                static o => o.DefaultEmail,
+                static (o, v) => o.DefaultEmail = v);
 
         public string DefaultEmail
         {
-            get;
-            set;
+            get => _defaultEmail;
+            set => SetAndRaise(DefaultEmailProperty, ref _defaultEmail, value);
+        }
+
+        public static readonly DirectProperty<Preferences, Models.GitAccount> SelectedGitAccountProperty =
+            AvaloniaProperty.RegisterDirect<Preferences, Models.GitAccount>(
+                nameof(SelectedGitAccount),
+                static o => o.SelectedGitAccount,
+                static (o, v) => o.SelectedGitAccount = v);
+
+        public Models.GitAccount SelectedGitAccount
+        {
+            get => _selectedGitAccount;
+            set => SetAndRaise(SelectedGitAccountProperty, ref _selectedGitAccount, value);
         }
 
         public Models.CRLFMode CRLFMode
@@ -442,6 +467,56 @@ namespace SourceGit.Views
             e.Handled = true;
         }
 
+        // MyGitGUI: git accounts
+        private void OnAddGitAccount(object sender, RoutedEventArgs e)
+        {
+            var account = new Models.GitAccount() { Name = "New account" };
+            ViewModels.Preferences.Instance.GitAccounts.Add(account);
+            SelectedGitAccount = account;
+            e.Handled = true;
+        }
+
+        private void OnRemoveSelectedGitAccount(object sender, RoutedEventArgs e)
+        {
+            if (SelectedGitAccount != null)
+            {
+                ViewModels.Preferences.Instance.GitAccounts.Remove(SelectedGitAccount);
+                SelectedGitAccount = null;
+            }
+
+            e.Handled = true;
+        }
+
+        private async void OnImportSavedGitAccounts(object sender, RoutedEventArgs e)
+        {
+            e.Handled = true;
+            var count = await ViewModels.GitAccounts.ImportSavedAsync(true);
+            if (count == 0)
+                await new Alert().ShowAsync(this, "No new saved logins found in Git Credential Manager.", false);
+        }
+
+                private async void OnUseGitAccountAsGlobal(object sender, RoutedEventArgs e)
+        {
+            e.Handled = true;
+
+            var account = SelectedGitAccount;
+            if (account == null)
+                return;
+
+            if (string.IsNullOrWhiteSpace(account.UserName) || string.IsNullOrWhiteSpace(account.Email))
+            {
+                await new Alert().ShowAsync(this, "Enter a user name and an email first.", true);
+                return;
+            }
+
+            await new Commands.GitAccountConfig(null).ApplyAsync(account);
+
+            // Keep the Git page in sync, otherwise closing the window writes the old values back.
+            DefaultUser = account.UserName.Trim();
+            DefaultEmail = account.Email.Trim();
+            await new Alert().ShowAsync(this, $"\"{account.DisplayName}\" is now the global default account.", false);
+        }
+
         private void OnAddCustomAction(object sender, RoutedEventArgs e)
         {
             var action = new Models.CustomAction() { Name = "Unnamed Action (Global)" };
@@ -528,5 +603,8 @@ namespace SourceGit.Views
         private string _gpgExecutableFile = string.Empty;
         private AI.Service _selectedOpenAIService = null;
         private Models.CustomAction _selectedCustomAction = null;
+        private string _defaultUser = string.Empty;
+        private string _defaultEmail = string.Empty;
+        private Models.GitAccount _selectedGitAccount = null;
     }
 }

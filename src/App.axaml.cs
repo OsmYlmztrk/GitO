@@ -548,6 +548,10 @@ namespace SourceGit
             if (pref.ShouldCheck4UpdateOnStartup())
                 Check4Update();
 #endif
+
+            // MyGitGUI: add logins saved in Git Credential Manager as git accounts.
+            if (pref.IsGitConfigured())
+                _ = ViewModels.GitAccounts.ImportSavedAsync(false);
         }
         #endregion
 

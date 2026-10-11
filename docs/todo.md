@@ -45,6 +45,7 @@ Background: the plugin snapshots each revision into facts and applies theirs ont
 - Not doing: pre-push warning, branch watch rules.
 
 ## 3. QoL
+- [x] **Git account switcher** (user, 2026-10-11; optional, hidden until accounts exist). Preferences → Accounts: list of `Models.GitAccount` (display name, user.name, user.email, GCM login, host) and "Use as global default". Toolbar account button (left of the branch pill): pick an account for this repo or "Use global default". Writes `user.name`, `user.email`, `credential.https://<host>.username` (`Commands/GitAccountConfig.cs`); checked that GCM picks the matching login. Waiting for the user's test. A username inside a remote URL still wins over this setting. Auto import (2026-10-11): on startup, GitHub logins from `git credential-manager github list` are added (`GitAccounts.ImportSavedAsync`); name/email from the global identity when user.name is the login, else GitHub API `/user` (public email or the noreply address). Removed logins stay removed (`ImportedGitLogins`); the import button on the Accounts page adds them again.
 - [ ] **Long operation progress:** taskbar progress bar during LFS pull/push/fetch/clone, Windows notification when done ("Pull completed"). Shares the notification code with the radar.
 
 ## 4. Distribution and auto-update (decided 2026-10-10)

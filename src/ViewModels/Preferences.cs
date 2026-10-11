@@ -486,6 +486,20 @@ namespace SourceGit.ViewModels
             set;
         } = [];
 
+        // MyGitGUI: git identities to switch between (Preferences > Accounts, toolbar account button).
+        public AvaloniaList<Models.GitAccount> GitAccounts
+        {
+            get;
+            set;
+        } = [];
+
+        // MyGitGUI: "host/login" of Git Credential Manager logins already imported, so removed ones don't come back.
+        public List<string> ImportedGitLogins
+        {
+            get;
+            set;
+        } = [];
+
         public double LastCheckUpdateTime
         {
             get => _lastCheckUpdateTime;
