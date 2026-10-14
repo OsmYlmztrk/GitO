@@ -38,6 +38,12 @@ namespace SourceGit
                 e.SetObserved();
             };
 
+            // MyGitGUI: askpass for a background command (Command.NonInteractive) must fail at once and
+            // with a non-zero exit code; an empty answer with exit 0 counts as a valid (empty) password.
+            if (Environment.GetEnvironmentVariable("SOURCEGIT_LAUNCH_AS_ASKPASS") is "TRUE" &&
+                Environment.GetEnvironmentVariable("MYGITGUI_ASKPASS_NONINTERACTIVE") is "TRUE")
+                Environment.Exit(1);
+
             try
             {
                 if (TryLaunchAsRebaseTodoEditor(args, out int exitTodo))

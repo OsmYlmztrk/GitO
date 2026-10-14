@@ -491,6 +491,40 @@ namespace SourceGit.ViewModels
             Models.Notification.Send(FullPath, message, isError);
         }
 
+        /// <summary>
+        ///     MyGitGUI: false (with a warning) when the Git account can't reach this HTTPS remote: not signed
+        ///     in, or no permission. Fetch / pull / push then don't start, so no sign-in window pops up.
+        ///     A success is remembered for 10 minutes; offline or other errors don't block.
+        /// </summary>
+        public async Task<bool> EnsureRemoteAccessAsync(Models.Remote remote, string operation, bool warn = true)
+        {
+            if (remote == null || !remote.URL.StartsWith("http", StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            if (_remoteAccessOkAt.TryGetValue(remote.Name, out var okAt) && DateTime.Now - okAt < TimeSpan.FromMinutes(10))
+                return true;
+
+            var check = new Commands.CheckRemoteAccess(FullPath);
+            var access = await check.CheckAsync(remote.Name);
+            if (access == Commands.CheckRemoteAccess.Access.Ok)
+                _remoteAccessOkAt[remote.Name] = DateTime.Now;
+            if (access != Commands.CheckRemoteAccess.Access.Denied)
+                return true;
+
+            _remoteAccessOkAt.Remove(remote.Name);
+            if (warn)
+            {
+                var account = await check.GetAccountAsync(remote.URL);
+                var who = string.IsNullOrEmpty(account) ? "No Git account is selected for this server" : $"The Git account '{account}' can't access it";
+                var signIn = remote.URL.Contains("github.com", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrEmpty(account)
+                    ? $"\n\nSign in once:\ngit credential-manager github login --username {account}"
+                    : "\n\nSign in with an account that has access to this repository.";
+                SendNotification($"{operation} didn't start: no access to remote '{remote.Name}'. {who}: it isn't signed in, or it has no permission for this repository.{signIn}", true);
+            }
+
+            return false;
+        }
+
         public bool CanCreatePopup()
         {
             var page = GetOwnerPage();
@@ -1911,7 +1945,17 @@ namespace SourceGit.ViewModels
                 log = CreateLog("Auto-Fetch");
 
                 foreach (var remote in remotes)
+                {
+                    // MyGitGUI: skip remotes the account can't reach; warn once, not on every auto-fetch.
+                    if (!await EnsureRemoteAccessAsync(remote, "Auto-fetch", !_remoteAccessWarned.Contains(remote.Name)))
+                    {
+                        _remoteAccessWarned.Add(remote.Name);
+                        continue;
+                    }
+
+                    _remoteAccessWarned.Remove(remote.Name);
                     await new Commands.Fetch(FullPath, remote).Use(log).ExecAsync();
+                }
 
                 _lastFetchTime = DateTime.Now;
             }
@@ -1958,6 +2002,8 @@ namespace SourceGit.ViewModels
         private bool _isAutoFetching = false;
         private Timer _autoFetchTimer = null;
         private DateTime _lastFetchTime = DateTime.MinValue;
+        private Dictionary<string, DateTime> _remoteAccessOkAt = new Dictionary<string, DateTime>();
+        private HashSet<string> _remoteAccessWarned = new HashSet<string>();
 
         private Models.BisectState _bisectState = Models.BisectState.None;
         private bool _isBisectCommandRunning = false;

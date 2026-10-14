@@ -114,6 +114,10 @@ namespace SourceGit.ViewModels
 
         public override async Task<bool> Sure()
         {
+            // MyGitGUI: don't start when the Git account can't reach the remote (no sign-in windows).
+            if (!await _repo.EnsureRemoteAccessAsync(_selectedRemote, "Pull"))
+                return false;
+
             using var lockWatcher = _repo.LockWatcher();
 
             var log = _repo.CreateLog("Pull");

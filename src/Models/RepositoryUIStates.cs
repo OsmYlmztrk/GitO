@@ -243,6 +243,13 @@ namespace SourceGit.Models
             set;
         } = [];
 
+        // MyGitGUI: levels whose "turn on One File Per Actor" notice the user turned off.
+        public List<string> DismissedLevelNotices
+        {
+            get;
+            set;
+        } = [];
+
         public static RepositoryUIStates Load(string gitDir)
         {
             var fileInfo = new FileInfo(Path.Combine(gitDir, "sourcegit.uistates"));

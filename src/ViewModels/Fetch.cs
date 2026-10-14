@@ -68,6 +68,13 @@ namespace SourceGit.ViewModels
 
         public override async Task<bool> Sure()
         {
+            // MyGitGUI: don't start when the Git account can't reach a remote (no sign-in windows).
+            foreach (var remote in FetchAllRemotes ? _repo.Remotes : [SelectedRemote])
+            {
+                if (!await _repo.EnsureRemoteAccessAsync(remote, "Fetch"))
+                    return false;
+            }
+
             using var lockWatcher = _repo.LockWatcher();
 
             var navigateToUpstreamHEAD = _repo.IsDashboardVisible &&

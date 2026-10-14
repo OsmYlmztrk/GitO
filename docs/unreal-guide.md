@@ -11,8 +11,8 @@ This guide is for people who use GitO on Unreal Engine projects. It covers what 
 | **Merge in Unreal** | Three-way merge of a conflicted `.uasset`, change by change: Unreal combines both branches in the background, and a merge window opens only when the same thing was changed on both sides. | UE 5.8 (Launcher) |
 | **Compare in Unreal** | Opens Unreal's diff with Ours on the left and Theirs on the right. | Any UE version GitO can find |
 | **Unreal's merge window** | Fallback for assets GitO's plugin can't read (e.g. levels): Unreal's own window, which keeps one side. | Any UE version GitO can find |
-| **LFS locks** | Lock, unlock and see who locked a file, from the conflict panel. | Git LFS, a server with LFS locking |
-| **Conflict Radar** | Warns when a file you are changing is also being changed on another branch, or is locked by someone else. | Git LFS for the lock part |
+| **LFS locks** | Lock and unlock files from the file context menu; see all locks in the **LFS Locks** window. | Git LFS, a server with LFS locking |
+| **Conflict Radar** | Warns when a file you are changing is also being changed on another branch. | — |
 
 ### Which assets merge change by change
 
@@ -25,7 +25,7 @@ This guide is for people who use GitO on Unreal Engine projects. It covers what 
 
 Anything in the right column is shown in the merge window as "can't merge automatically". You can leave it out, which keeps your (ours) version of that part.
 
-Not merged change by change yet: timelines, inherited component overrides, function local variables, and levels (`.umap`). Levels go to Unreal's own merge window.
+Not merged change by change yet: timelines, inherited component overrides, function local variables, and levels (`.umap`). Levels go to Unreal's own merge window. Most level conflicts disappear with [One File Per Actor](#levels-one-file-per-actor).
 
 ## 2. Install
 
@@ -75,8 +75,8 @@ GitO works with any Git repository. For Unreal projects these settings avoid mos
 *.psd  filter=lfs diff=lfs merge=lfs -text
 ```
 
-- `lockable` turns on LFS locking for these files. GitO's lock buttons and the lock part of Conflict Radar only work for lockable files.
-- Lockable files are read-only on disk until you lock them. Unreal then asks to "make writable" when you save; lock the asset in GitO first (conflict panel → **Lock**) so others see you are working on it.
+- `lockable` turns on LFS locking for these files. GitO's lock commands only work for lockable files.
+- Lockable files are read-only on disk until you lock them. Unreal then asks to "make writable" when you save; lock the asset in GitO first (right-click the file → **LFS** → **Lock**) so others see you are working on it.
 - Your Git server must support LFS locking (GitHub, GitLab, Gitea and Azure DevOps do).
 
 ### `.gitignore`: keep generated folders out
@@ -91,6 +91,25 @@ DerivedDataCache/
 Plugins/*/Binaries/
 Plugins/*/Intermediate/
 ```
+
+### Levels: One File Per Actor
+
+By default a level (`.umap`) keeps all its actors in one file. Two people who edit the same level then always conflict, even when they touched different actors, and the conflict can only be solved by keeping one side.
+
+With **One File Per Actor** each actor is saved as its own small file under `Content/__ExternalActors__/<level path>/`. People who edit different actors no longer conflict; only two edits to the same actor do. GitO merges a level only when both sides use One File Per Actor. Mixing the two layouts is not supported.
+
+GitO tells you when a level isn't set up this way:
+- **Local Changes:** a yellow note when you change such a level. **Turn it on...** lists what to check first; after you press OK, GitO converts the level with Unreal in the background (Unreal Editor must be closed; it can lock the level with Git LFS first). Nothing is committed: commit the level with the new actor files yourself. **I'll do it myself in Unreal** opens this section instead. **Don't show again** turns the note off for that level.
+- **Conflict panel:** a note on a conflicted level. If One File Per Actor was turned on in only one of the two branches, the note says which one: take that side, then redo the other branch's changes to the level in Unreal.
+
+**Turn it on for an existing level yourself** (what GitO's button does for you):
+1. Make sure nobody else has unpushed changes to this level (ask your team, or lock the `.umap`). Converting rewrites the level, so changes made elsewhere to the old one-file version can't be merged into it afterwards.
+2. Open the level in Unreal and save it.
+3. **Window → World Settings**, category **World**: tick **Use External Actors**.
+4. Answer **Yes** to "Do you want to convert all actors to External packaging as well?".
+5. **File → Save All**. Commit the `.umap` together with the new `__ExternalActors__` folder (and `__ExternalObjects__`, which holds the actor folders) and push. Everyone pulls before editing the level again.
+
+**New levels:** the **Open World** and **Empty Open World** templates (File → New Level) use World Partition, which always uses One File Per Actor; the checkbox is greyed out there. For other levels, turn it on as above right after the first save.
 
 ### Unreal's own source control setting
 

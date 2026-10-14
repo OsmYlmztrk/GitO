@@ -152,7 +152,6 @@ namespace SourceGit.ViewModels
         public void Rescan()
         {
             _fileCache.Clear();
-            _locksFetchedAt = DateTime.MinValue;
             Schedule(0);
         }
 
@@ -342,13 +341,10 @@ namespace SourceGit.ViewModels
                 }
 
                 _myEmail ??= await new Commands.Config(repoPath).GetAsync("user.email").ConfigureAwait(false) ?? string.Empty;
-                _myName ??= await new Commands.Config(repoPath).GetAsync("user.name").ConfigureAwait(false) ?? string.Empty;
 
-                // ---- LFS: lockable files and current locks (network; cached for a minute).
-                var lockable = new HashSet<string>(StringComparer.Ordinal);
-                var myLocks = new HashSet<string>(StringComparer.Ordinal);
-                var otherLocks = new Dictionary<string, Models.LFSLock>(StringComparer.Ordinal);
+                // ---- LFS: lockable files (local only; the radar does not query locks on the server).
                 var usesLFS = UsesLFS(repoPath);
+                var lockable = new HashSet<string>(StringComparer.Ordinal);
                 if (usesLFS)
                 {
                     var paths = new List<string>(mine.Keys);
@@ -357,12 +353,6 @@ namespace SourceGit.ViewModels
                         var chunk = paths.GetRange(i, Math.Min(100, paths.Count - i));
                         lockable.UnionWith(await new Commands.QueryLockableFiles(repoPath, chunk).GetResultAsync().ConfigureAwait(false));
                     }
-
-                    await RefreshLocksAsync(repoPath).ConfigureAwait(false);
-                    foreach (var l in _cachedMyLocks)
-                        myLocks.Add(l.Path);
-                    foreach (var l in _cachedOtherLocks)
-                        otherLocks.TryAdd(l.Path, l);
                 }
 
                 token.ThrowIfCancellationRequested();
@@ -431,46 +421,8 @@ namespace SourceGit.ViewModels
                             Time = t.Time,
                             IsUncommitted = isUncommitted,
                             IsLockable = lockable.Contains(path),
-                            IsLocked = myLocks.Contains(path) || otherLocks.ContainsKey(path),
                         });
                     }
-                }
-
-                // ---- Their side (2): somebody else holds the lock of a file I am changing (catches unpushed work).
-                foreach (var (path, l) in otherLocks)
-                {
-                    if (!mine.TryGetValue(path, out var isUncommitted))
-                        continue;
-
-                    risks.Add(new Models.ConflictRisk()
-                    {
-                        Kind = Models.ConflictRiskKind.LockedByOther,
-                        Level = Models.ConflictRiskLevel.High,
-                        Path = path,
-                        Author = l.Owner?.Name ?? "?",
-                        Time = ParseLockTime(l.LockedAt),
-                        IsUncommitted = isUncommitted,
-                        IsLockable = true,
-                        IsLocked = true,
-                    });
-                }
-
-                // ---- Reminder: editing a lockable file without holding its lock.
-                foreach (var path in lockable)
-                {
-                    if (!mine.TryGetValue(path, out var isUncommitted) || !isUncommitted)
-                        continue;
-                    if (myLocks.Contains(path) || otherLocks.ContainsKey(path))
-                        continue;
-
-                    risks.Add(new Models.ConflictRisk()
-                    {
-                        Kind = Models.ConflictRiskKind.UnlockedEdit,
-                        Level = Models.ConflictRiskLevel.Low,
-                        Path = path,
-                        IsUncommitted = true,
-                        IsLockable = true,
-                    });
                 }
 
                 risks.Sort((l, r) => l.Level != r.Level ? r.Level.CompareTo(l.Level) : r.Time.CompareTo(l.Time));
@@ -480,31 +432,6 @@ namespace SourceGit.ViewModels
             {
                 Dispatcher.UIThread.Post(() => IsScanning = false);
             }
-        }
-
-        private async Task RefreshLocksAsync(string repoPath)
-        {
-            if (DateTime.Now - _locksFetchedAt < TimeSpan.FromSeconds(60))
-                return;
-
-            _locksFetchedAt = DateTime.Now;
-
-            var remote = GetRemote();
-            if (string.IsNullOrEmpty(remote))
-                return;
-
-            var verified = await new Commands.QueryVerifiedLFSLocks(repoPath, remote).GetResultAsync().ConfigureAwait(false);
-            if (verified != null)
-            {
-                _cachedMyLocks = verified.Ours ?? [];
-                _cachedOtherLocks = verified.Theirs ?? [];
-                return;
-            }
-
-            // Server without --verify support: split by owner name.
-            var all = await new Commands.LFS(repoPath) { RaiseError = false }.GetLocksAsync(remote).ConfigureAwait(false);
-            _cachedMyLocks = all.FindAll(x => x.Owner?.Name == _myName);
-            _cachedOtherLocks = all.FindAll(x => x.Owner?.Name != _myName);
         }
 
         private void Publish(List<Models.ConflictRisk> risks, CancellationToken token)
@@ -649,13 +576,6 @@ namespace SourceGit.ViewModels
             }
         }
 
-        private static ulong ParseLockTime(string iso)
-        {
-            if (DateTimeOffset.TryParse(iso, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var time))
-                return (ulong)time.ToUnixTimeSeconds();
-
-            return 0;
-        }
 
         private const int MaxToasts = 3;
 
@@ -667,11 +587,7 @@ namespace SourceGit.ViewModels
         private List<Models.ConflictRisk> _allRisks = [];
         private bool _isScanning = false;
         private string _myEmail = null;
-        private string _myName = null;
         private CancellationTokenSource _debounce = null;
-        private DateTime _locksFetchedAt = DateTime.MinValue;
-        private List<Models.LFSLock> _cachedMyLocks = [];
-        private List<Models.LFSLock> _cachedOtherLocks = [];
         private readonly ConcurrentDictionary<string, HashSet<string>> _fileCache = new(StringComparer.Ordinal);
     }
 }

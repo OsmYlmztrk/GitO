@@ -93,6 +93,13 @@
     <Style Selector="Button.take:pointerover /template/ ContentPresenter#PART_ContentPresenter">
       <Setter Property="Opacity" Value="0.85"/>
     </Style>
+    <!-- MyGitGUI: the hints on this panel are sentences; wrap them instead of one long line -->
+    <Style Selector="ToolTip">
+      <Setter Property="MaxWidth" Value="380"/>
+    </Style>
+    <Style Selector="ToolTip /template/ ContentPresenter">
+      <Setter Property="TextWrapping" Value="Wrap"/>
+    </Style>
   </UserControl.Styles>
 
   <UserControl.DataTemplates>
@@ -150,21 +157,6 @@
           </Border>
           <Border Grid.Column="3" Classes="chip" Background="#28B77EE0" BorderBrush="#A0B77EE0" IsVisible="{Binding IsLFS}">
             <TextBlock Text="LFS" Foreground="#FFB77EE0"/>
-          </Border>
-          <Border Grid.Column="4" Classes="chip" Background="#28F0A33A" BorderBrush="#A0F0A33A" IsVisible="{Binding IsLockedByOthers}">
-            <StackPanel Orientation="Horizontal" Spacing="4">
-              <Path Width="10" Height="10" Data="{StaticResource Icons.Lock}" Fill="#FFF0A33A"/>
-              <TextBlock Foreground="#FFF0A33A">
-                <Run Text="Locked by"/>
-                <Run Text="{Binding Lock.Owner.Name}"/>
-              </TextBlock>
-            </StackPanel>
-          </Border>
-          <Border Grid.Column="4" Classes="chip" Background="#284C9AFF" BorderBrush="#A04C9AFF" IsVisible="{Binding IsLockedByMe}">
-            <StackPanel Orientation="Horizontal" Spacing="4">
-              <Path Width="10" Height="10" Data="{StaticResource Icons.Lock}" Fill="{DynamicResource Brush.Accent}"/>
-              <TextBlock Text="Locked by you" Foreground="{DynamicResource Brush.Accent}"/>
-            </StackPanel>
           </Border>
           <Border Grid.Column="5" Classes="chip" Background="#28E5534B" BorderBrush="#A0E5534B">
             <TextBlock Foreground="#FFF08A84">
@@ -225,6 +217,23 @@
               </StackPanel>
             </Border>
           </UniformGrid>
+
+          <!-- MyGitGUI: level that can't be merged because it isn't One File Per Actor on both sides -->
+          <Border Classes="status" BorderBrush="#80F5A524" Background="#1FF5A524"
+                  IsVisible="{Binding LevelNotice, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+            <Grid ColumnDefinitions="Auto,*">
+              <Path Grid.Column="0" Width="14" Height="14" VerticalAlignment="Top" Margin="0,2,0,0"
+                    Data="{StaticResource Icons.Error}" Fill="#FFF5A524"/>
+              <StackPanel Grid.Column="1" Margin="8,0,0,0" Orientation="Vertical" Spacing="6">
+                <TextBlock Text="This level can't be merged change by change" FontWeight="SemiBold"/>
+                <TextBlock FontSize="11" TextWrapping="Wrap" Foreground="{DynamicResource Brush.FG2}" Text="{Binding LevelNotice}"/>
+                <Button Classes="flat" Height="28" Padding="10,0" HorizontalAlignment="Left" Click="OnOpenLevelGuide"
+                        ToolTip.Tip="Opens the GitO guide on GitHub">
+                  <TextBlock Text="How to turn on One File Per Actor"/>
+                </Button>
+              </StackPanel>
+            </Grid>
+          </Border>
 
           <!-- Unreal Editor -->
           <Border Classes="card" IsVisible="{Binding IsUnrealAsset}">
@@ -375,71 +384,44 @@
             </StackPanel>
           </Border>
 
-          <!-- Tools -->
-          <UniformGrid Columns="2" ColumnSpacing="14">
-            <!-- Merge -->
-            <Border Classes="card">
-              <StackPanel Orientation="Vertical" Spacing="8">
-                <StackPanel Orientation="Horizontal" Spacing="8">
-                  <Path Width="14" Height="14" Data="{StaticResource Icons.Conflict}"/>
-                  <TextBlock Text="Merge" FontWeight="SemiBold"/>
-                </StackPanel>
-                <TextBlock TextWrapping="Wrap" FontSize="11" Foreground="{DynamicResource Brush.FG2}"
-                           Text="Pick changes from Ours and Theirs chunk by chunk in the built-in 3-way editor."
-                           IsVisible="{Binding !IsBinary}"/>
-                <TextBlock TextWrapping="Wrap" FontSize="11" Foreground="{DynamicResource Brush.FG2}"
-                           Text="Opens the merge tool configured in Preferences › Diff/Merge Tool with Base, Ours and Theirs. Resolve there, then stage the file."
-                           IsVisible="{Binding IsBinary}"/>
-                <StackPanel Orientation="Horizontal" Spacing="8">
-                  <Button Classes="flat primary" Height="28" Padding="10,0" Click="OnMerge"
-                          IsVisible="{Binding State, Mode=OneWay, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static m:ConflictFileState.UnmergedText}}">
-                    <StackPanel Orientation="Horizontal" Spacing="6">
-                      <Path Width="12" Height="12" Data="{StaticResource Icons.Conflict}" Fill="White"/>
-                      <TextBlock Text="{DynamicResource Text.WorkingCopy.Conflicts.Merge}" Foreground="White"/>
-                    </StackPanel>
-                  </Button>
-                  <Button Classes="flat" Height="28" Padding="10,0" Click="OnMergeExternal"
-                          IsVisible="{Binding CanUseExternalMergeTool}">
-                    <StackPanel Orientation="Horizontal" Spacing="6">
-                      <Path Width="12" Height="12" Data="{StaticResource Icons.OpenWith}"/>
-                      <TextBlock Text="{DynamicResource Text.WorkingCopy.Conflicts.MergeExternal}"/>
-                    </StackPanel>
-                  </Button>
-                </StackPanel>
+          <!-- Merge -->
+          <Border Classes="card">
+            <StackPanel Orientation="Vertical" Spacing="8">
+              <StackPanel Orientation="Horizontal" Spacing="8">
+                <Path Width="14" Height="14" Data="{StaticResource Icons.Conflict}"/>
+                <TextBlock Text="Merge" FontWeight="SemiBold"/>
+                <Border Background="Transparent" VerticalAlignment="Center" Margin="2,0,0,0" ToolTip.ShowDelay="0"
+                        ToolTip.Tip="Ways to combine both versions yourself. Text files: the built-in editor shows both sides; you pick each changed block. Binary files (assets): only an outside program can do it, e.g. a diff/merge tool set in Preferences. For Unreal assets use Merge in Unreal above instead.">
+                  <Path Width="12" Height="12" Data="{StaticResource Icons.Info}" Fill="{DynamicResource Brush.FG2}"/>
+                </Border>
               </StackPanel>
-            </Border>
-
-            <!-- LFS lock -->
-            <Border Classes="card" IsVisible="{Binding IsLFS}">
-              <StackPanel Orientation="Vertical" Spacing="8">
-                <Grid ColumnDefinitions="Auto,Auto,*,Auto">
-                  <Path Grid.Column="0" Width="14" Height="14" Data="{StaticResource Icons.Lock}"/>
-                  <TextBlock Grid.Column="1" Margin="8,0,0,0" Text="LFS Lock" FontWeight="SemiBold"/>
-                  <v:LoadingIcon Grid.Column="3" Width="14" Height="14" IsVisible="{Binding IsLockInfoLoading}"/>
-                </Grid>
-
-                <TextBlock FontSize="11" Foreground="{DynamicResource Brush.FG2}" TextWrapping="Wrap"
-                           Text="Not locked. Lock the file before editing so nobody else changes it in the meantime."
-                           IsVisible="{Binding !IsLocked}"/>
-                <TextBlock FontSize="11" Foreground="{DynamicResource Brush.FG2}" TextWrapping="Wrap"
-                           Text="You hold the lock on this file. Unlock it after the merge is pushed."
-                           IsVisible="{Binding IsLockedByMe}"/>
-                <TextBlock FontSize="11" Foreground="{DynamicResource Brush.FG2}" TextWrapping="Wrap" IsVisible="{Binding IsLockedByOthers}">
-                  <Run Text="{Binding Lock.Owner.Name}" Foreground="#FFF0A33A" FontWeight="SemiBold"/>
-                  <Run Text="holds the lock. Taking Ours overwrites their locked work — ask them to unlock, or force unlock if you have admin rights."/>
-                </TextBlock>
-
-                <StackPanel Orientation="Horizontal" Spacing="8">
-                  <Button Classes="flat" Height="28" Padding="10,0" Content="Lock" Click="OnLock" IsVisible="{Binding !IsLocked}"/>
-                  <Button Classes="flat" Height="28" Padding="10,0" Content="Unlock" Click="OnUnlock" IsVisible="{Binding IsLockedByMe}"/>
-                  <Button Classes="flat" Height="28" Padding="10,0" Click="OnForceUnlock" IsVisible="{Binding IsLockedByOthers}">
-                    <TextBlock Text="Force Unlock" Foreground="#FFF08A84"/>
-                  </Button>
-                  <Button Classes="flat" Height="28" Padding="10,0" Content="Refresh" Click="OnRefreshLock"/>
-                </StackPanel>
+              <TextBlock TextWrapping="Wrap" FontSize="11" Foreground="{DynamicResource Brush.FG2}"
+                         Text="Pick changes from Ours and Theirs chunk by chunk in the built-in 3-way editor."
+                         IsVisible="{Binding !IsBinary}"/>
+              <TextBlock TextWrapping="Wrap" FontSize="11" Foreground="{DynamicResource Brush.FG2}"
+                         Text="Opens the merge tool configured in Preferences › Diff/Merge Tool with Base, Ours and Theirs. Resolve there, then stage the file."
+                         IsVisible="{Binding IsBinary}"/>
+              <StackPanel Orientation="Horizontal" Spacing="8">
+                <Button Classes="flat primary" Height="28" Padding="10,0" Click="OnMerge"
+                        IsVisible="{Binding State, Mode=OneWay, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static m:ConflictFileState.UnmergedText}}">
+                  <StackPanel Orientation="Horizontal" Spacing="6">
+                    <Path Width="12" Height="12" Data="{StaticResource Icons.Conflict}" Fill="White"/>
+                    <TextBlock Text="{DynamicResource Text.WorkingCopy.Conflicts.Merge}" Foreground="White"/>
+                  </StackPanel>
+                </Button>
+                <Button Classes="flat" Height="28" Padding="10,0" Click="OnMergeExternal"
+                        ToolTip.Tip="Opens the diff/merge tool from Preferences with three files: Base (before both changes), Ours and Theirs. Save the result there, then stage the file here."
+                        IsVisible="{Binding CanUseExternalMergeTool}">
+                  <StackPanel Orientation="Horizontal" Spacing="6">
+                    <Path Width="12" Height="12" Data="{StaticResource Icons.OpenWith}"/>
+                    <TextBlock Text="{DynamicResource Text.WorkingCopy.Conflicts.MergeExternal}"/>
+                  </StackPanel>
+                </Button>
               </StackPanel>
-            </Border>
-          </UniformGrid>
+            </StackPanel>
+          </Border>
+
+
         </StackPanel>
       </ScrollViewer>
 

@@ -154,35 +154,4 @@ namespace SourceGit.Commands
             return set;
         }
     }
-
-    /// <summary>
-    ///     MyGitGUI: `git lfs locks --verify --json`, split into my locks and other people's locks.
-    ///     Returns null when the server does not support verification (caller falls back).
-    /// </summary>
-    public class QueryVerifiedLFSLocks : Command
-    {
-        public QueryVerifiedLFSLocks(string repo, string remote)
-        {
-            WorkingDirectory = repo;
-            Context = repo;
-            Args = $"lfs locks --verify --json --remote={remote}";
-            RaiseError = false;
-        }
-
-        public async Task<Models.LFSVerifiedLocks> GetResultAsync()
-        {
-            var rs = await ReadToEndAsync().ConfigureAwait(false);
-            if (!rs.IsSuccess)
-                return null;
-
-            try
-            {
-                return JsonSerializer.Deserialize(rs.StdOut, JsonCodeGen.Default.LFSVerifiedLocks);
-            }
-            catch
-            {
-                return null;
-            }
-        }
-    }
 }

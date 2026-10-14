@@ -1,0 +1,114 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="using:SourceGit.ViewModels"
+             mc:Ignorable="d" d:DesignWidth="500" d:DesignHeight="400"
+             x:Class="SourceGit.Views.ConvertLevelToExternalActors"
+             x:DataType="vm:ConvertLevelToExternalActors">
+  <!-- MyGitGUI: turn on One File Per Actor for a level: warnings first, then the steps. -->
+  <UserControl.Styles>
+    <Style Selector="TextBlock.faded">
+      <Setter Property="Opacity" Value="0.55"/>
+    </Style>
+    <Style Selector="TextBlock.skipped">
+      <Setter Property="Opacity" Value="0.55"/>
+      <Setter Property="TextDecorations" Value="Strikethrough"/>
+    </Style>
+    <Style Selector="TextBlock.warn">
+      <Setter Property="FontSize" Value="12"/>
+      <Setter Property="TextWrapping" Value="Wrap"/>
+      <Setter Property="Margin" Value="0,2"/>
+    </Style>
+  </UserControl.Styles>
+
+  <StackPanel Orientation="Vertical" Margin="8,0">
+    <Grid ColumnDefinitions="Auto,*">
+      <Path Grid.Column="0" Width="16" Height="16" Data="{StaticResource Icons.File}"/>
+      <TextBlock Grid.Column="1" FontSize="18" Margin="8,0,0,0" Classes="bold" TextTrimming="CharacterEllipsis"
+                 Text="Turn on One File Per Actor"/>
+    </Grid>
+    <TextBlock Margin="24,4,0,0" Foreground="{DynamicResource Brush.FG2}" TextTrimming="CharacterEllipsis" Text="{Binding LevelPath}"/>
+
+    <!-- Before: what happens and what to check -->
+    <StackPanel Orientation="Vertical" Margin="0,14,0,0" Spacing="10" IsVisible="{Binding !HasStarted}">
+      <TextBlock TextWrapping="Wrap">
+        <Run Text="GitO runs Unreal in the background and moves every actor of"/>
+        <Run Text="{Binding LevelName}" FontWeight="SemiBold"/>
+        <Run Text="into its own file. Nothing is committed: you check and commit the result yourself."/>
+      </TextBlock>
+
+      <Border Padding="10,8" CornerRadius="6" BorderThickness="1" BorderBrush="#80F5A524" Background="#1FF5A524">
+        <Grid ColumnDefinitions="Auto,*">
+          <Path Grid.Column="0" Width="14" Height="14" VerticalAlignment="Top" Margin="0,2,0,0"
+                Data="{StaticResource Icons.Error}" Fill="#FFF5A524"/>
+          <StackPanel Grid.Column="1" Margin="8,0,0,0" Orientation="Vertical">
+            <TextBlock Text="Before you continue" FontWeight="SemiBold" Margin="0,0,0,4"/>
+            <TextBlock Classes="warn" Text="•  Save your work in Unreal and close Unreal Editor. GitO doesn't start while it is running."/>
+            <TextBlock Classes="warn" Text="•  Nobody else should have unpushed changes to this level. Their changes can't be merged into the converted level; they would have to redo them."/>
+            <TextBlock Classes="warn" Text="•  Afterwards, commit the level together with the new actor files and push. Everyone pulls before they edit this level again."/>
+            <TextBlock Classes="warn" Text="•  To go back before you commit, discard the level and the new actor files in Local Changes."/>
+          </StackPanel>
+        </Grid>
+      </Border>
+
+      <CheckBox IsChecked="{Binding LockFirst, Mode=TwoWay}" IsVisible="{Binding CanLock}">
+        <TextBlock TextWrapping="Wrap" Text="Lock the level with Git LFS first, so others see that you are changing it"/>
+      </CheckBox>
+
+      <Grid ColumnDefinitions="*,Auto">
+        <TextBlock Grid.Column="0" VerticalAlignment="Center" Foreground="{DynamicResource Brush.FG2}" Text="Press OK to convert."/>
+        <Button Grid.Column="1" Classes="flat" Height="28" Padding="10,0" Click="OnDoItMyself"
+                ToolTip.Tip="Closes this and opens the step-by-step guide on GitHub">
+          <TextBlock Text="I'll do it myself in Unreal"/>
+        </Button>
+      </Grid>
+    </StackPanel>
+
+    <!-- Running / result -->
+    <StackPanel Orientation="Vertical" IsVisible="{Binding HasStarted}">
+      <ItemsControl Margin="0,16,0,0" ItemsSource="{Binding Steps}">
+        <ItemsControl.ItemTemplate>
+          <DataTemplate DataType="vm:UnrealMergeStep">
+            <Grid ColumnDefinitions="24,*,Auto" Margin="0,5">
+              <Grid Grid.Column="0" Width="14" Height="14" VerticalAlignment="Top" Margin="0,2,0,0">
+                <Ellipse Width="9" Height="9" StrokeThickness="1.5" Stroke="{DynamicResource Brush.FG2}" IsVisible="{Binding IsPending}"/>
+                <Path Width="13" Height="13" Classes="rotating" Fill="{DynamicResource Brush.Accent}" IsVisible="{Binding IsRunning}"/>
+                <Path Width="14" Height="14" Data="{StaticResource Icons.Check}" Fill="#FF3CB371" IsVisible="{Binding IsDone}"/>
+                <Path Width="12" Height="12" Data="{StaticResource Icons.Skip}" Fill="{DynamicResource Brush.FG2}" IsVisible="{Binding IsSkipped}"/>
+                <Path Width="13" Height="13" Data="{StaticResource Icons.Error}" Fill="#FFE5484D" IsVisible="{Binding IsFailed}"/>
+              </Grid>
+
+              <StackPanel Grid.Column="1" Orientation="Vertical">
+                <TextBlock Text="{Binding Title}"
+                           TextWrapping="Wrap"
+                           Classes.bold="{Binding IsRunning}"
+                           Classes.faded="{Binding IsPending}"
+                           Classes.skipped="{Binding IsSkipped}"/>
+                <TextBlock Margin="0,2,0,0"
+                           FontSize="11"
+                           TextWrapping="Wrap"
+                           Foreground="{DynamicResource Brush.FG2}"
+                           Text="{Binding Detail}"
+                           IsVisible="{Binding Detail, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+              </StackPanel>
+
+              <TextBlock Grid.Column="2" Margin="8,0,0,0" FontSize="11" VerticalAlignment="Top"
+                         Foreground="{DynamicResource Brush.FG2}" Text="{Binding Time}"/>
+            </Grid>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+
+      <Border Margin="0,12,0,4" Padding="10,8" CornerRadius="6" BorderThickness="1"
+              Background="{DynamicResource Brush.Contents}" BorderBrush="{DynamicResource Brush.Border1}"
+              IsVisible="{Binding Hint, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+        <Grid ColumnDefinitions="Auto,*">
+          <Path Grid.Column="0" Width="14" Height="14" VerticalAlignment="Top" Margin="0,2,0,0"
+                Data="{StaticResource Icons.Info}" Fill="{DynamicResource Brush.Accent}"/>
+          <SelectableTextBlock Grid.Column="1" Margin="8,0,0,0" TextWrapping="Wrap" Text="{Binding Hint}"/>
+        </Grid>
+      </Border>
+    </StackPanel>
+  </StackPanel>
+</UserControl>

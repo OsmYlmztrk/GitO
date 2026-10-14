@@ -9,7 +9,7 @@ GitO is based on [SourceGit](https://github.com/sourcegit-scm/sourcegit), an ope
 ## Features added by GitO
 
 * **Unreal asset merge:** three-way merge of conflicted `.uasset` files change by change (Blueprint incl. Widget and Anim Blueprints, Data Asset, Data Table, Material Instance), through the included Unreal Engine 5.8 editor plugin. Changes that can't be merged automatically are shown, not dropped silently.
-* **Conflict Radar:** warns when a file you are changing is also being changed by someone else, on a recently active remote branch or behind an LFS lock.
+* **Conflict Radar:** warns when a file you are changing is also being changed by someone else on a recently active remote branch.
 * A compact commit, branch and conflict layout for daily work on large repositories.
 
 Everything else (history, staging, diff, stash, worktrees, LFS, themes, and more) comes from SourceGit.

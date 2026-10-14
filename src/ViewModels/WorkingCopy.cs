@@ -241,6 +241,22 @@ namespace SourceGit.ViewModels
             set => SetProperty(ref _commitMessage, value);
         }
 
+        // MyGitGUI: a changed Unreal level that keeps all its actors in one file (see Models.UnrealLevel).
+        public string LevelNoticePath
+        {
+            get => _levelNoticePath;
+            private set
+            {
+                if (SetProperty(ref _levelNoticePath, value))
+                    OnPropertyChanged(nameof(LevelNoticeName));
+            }
+        }
+
+        public string LevelNoticeName
+        {
+            get => string.IsNullOrEmpty(_levelNoticePath) ? string.Empty : Path.GetFileName(_levelNoticePath);
+        }
+
         public WorkingCopy(Repository repo)
         {
             _repo = repo;
@@ -282,6 +298,7 @@ namespace SourceGit.ViewModels
                 HasUnsolvedConflicts = _cached.Find(x => x.IsConflicted) != null;
                 UpdateInProgressState();
                 UpdateDetail();
+                UpdateLevelNotice(); // the level may have been converted without changing the list
                 return;
             }
 
@@ -360,6 +377,46 @@ namespace SourceGit.ViewModels
 
             UpdateInProgressState();
             UpdateDetail();
+            UpdateLevelNotice();
+        }
+
+        /// <summary>
+        ///     MyGitGUI: stops the One File Per Actor notice for this level in this repository.
+        /// </summary>
+        public void DismissLevelNotice()
+        {
+            if (string.IsNullOrEmpty(_levelNoticePath))
+                return;
+
+            _repo.UIStates.DismissedLevelNotices.Add(_levelNoticePath);
+            _repo.UIStates.Save();
+            UpdateLevelNotice();
+        }
+
+        /// <summary>
+        ///     MyGitGUI: asks before converting the noticed level to One File Per Actor (see ConvertLevelToExternalActors).
+        /// </summary>
+        public async Task ConvertLevelAsync()
+        {
+            var path = _levelNoticePath;
+            if (string.IsNullOrEmpty(path) || !_repo.CanCreatePopup())
+                return;
+
+            var project = Models.UnrealEngine.FindProject(Path.Combine(_repo.FullPath, path));
+            var editor = Models.UnrealEngine.FindEditor(project);
+            if (editor == null)
+            {
+                _repo.SendNotification("Unreal Editor for this project's engine version wasn't found, so GitO can't convert the level. " +
+                    "The guide that opened shows how to do it in Unreal.", true);
+                Native.OS.OpenBrowser(Models.UnrealLevel.GuideUrl);
+                return;
+            }
+
+            string lockRemote = null;
+            if (_repo.Remotes.Count > 0 && await new Commands.IsLFSFiltered(_repo.FullPath, path).GetResultAsync())
+                lockRemote = _repo.Remotes.Find(x => x.Name == "origin")?.Name ?? _repo.Remotes[0].Name;
+
+            _repo.ShowPopup(new ConvertLevelToExternalActors(_repo, path, project, editor, lockRemote));
         }
 
         public async Task StageChangesAsync(List<Models.Change> changes, Models.Change next)
@@ -909,6 +966,34 @@ namespace SourceGit.ViewModels
             return first.Change;
         }
 
+        /// <summary>
+        ///     MyGitGUI: the first changed level stored as one file whose notice wasn't dismissed.
+        ///     Conflicted levels get their own notice on the conflict panel.
+        /// </summary>
+        private void UpdateLevelNotice()
+        {
+            string found = null;
+            var dismissed = _repo.UIStates.DismissedLevelNotices;
+            foreach (var c in _cached)
+            {
+                if (c.IsConflicted ||
+                    c.Index == Models.ChangeState.Deleted ||
+                    c.WorkTree == Models.ChangeState.Deleted ||
+                    !Models.UnrealLevel.IsLevelFile(c.Path) ||
+                    dismissed.Contains(c.Path))
+                    continue;
+
+                if (Models.UnrealLevel.UsesOneFilePerActor(_repo.FullPath, c.Path) ||
+                    Models.UnrealEngine.FindProject(Path.Combine(_repo.FullPath, c.Path)) == null)
+                    continue;
+
+                found = c.Path;
+                break;
+            }
+
+            LevelNoticePath = found;
+        }
+
         private class ChangeInTree
         {
             public Models.Change Change { get; set; }
@@ -939,6 +1024,7 @@ namespace SourceGit.ViewModels
         private object _detailContext = null;
         private string _filter = string.Empty;
         private string _commitMessage = string.Empty;
+        private string _levelNoticePath = null;
 
         private bool _hasUnsolvedConflicts = false;
         private InProgressContext _inProgressContext = null;

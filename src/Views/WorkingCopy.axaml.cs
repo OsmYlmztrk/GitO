@@ -40,6 +40,23 @@ namespace SourceGit.Views
             e.Handled = true;
         }
 
+        // MyGitGUI: One File Per Actor notice for a changed level
+        private async void OnConvertLevel(object sender, RoutedEventArgs e)
+        {
+            if (DataContext is ViewModels.WorkingCopy vm)
+                await vm.ConvertLevelAsync();
+
+            e.Handled = true;
+        }
+
+        private void OnDismissLevelNotice(object sender, RoutedEventArgs e)
+        {
+            if (DataContext is ViewModels.WorkingCopy vm)
+                vm.DismissLevelNotice();
+
+            e.Handled = true;
+        }
+
         private void OnUnstagedContextRequested(object sender, ContextRequestedEventArgs e)
         {
             if (DataContext is ViewModels.WorkingCopy { Repository: { } repo, SelectedUnstaged: { Count: > 0 } selection } vm)

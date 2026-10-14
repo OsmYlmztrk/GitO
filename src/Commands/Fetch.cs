@@ -26,6 +26,7 @@ namespace SourceGit.Commands
             Context = repo;
             SSHKey = remote.PrivateSSHKey;
             RaiseError = false;
+            NonInteractive = true; // MyGitGUI: used by auto-fetch only; never pop up GCM's account picker.
             Args = $"fetch --progress --verbose {remote.Name}";
         }
 

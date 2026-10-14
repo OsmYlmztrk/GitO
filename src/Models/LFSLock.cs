@@ -22,14 +22,4 @@ namespace SourceGit.Models
         [JsonPropertyName("locked_at")]
         public string LockedAt { get; set; } = string.Empty;
     }
-
-    // MyGitGUI: output of `git lfs locks --verify --json` (locks split into mine / others').
-    public class LFSVerifiedLocks
-    {
-        [JsonPropertyName("ours")]
-        public System.Collections.Generic.List<LFSLock> Ours { get; set; } = [];
-
-        [JsonPropertyName("theirs")]
-        public System.Collections.Generic.List<LFSLock> Theirs { get; set; } = [];
-    }
 }

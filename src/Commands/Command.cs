@@ -37,6 +37,10 @@ namespace SourceGit.Commands
         public bool RaiseError { get; set; } = true;
         public Models.ICommandLog Log { get; set; } = null;
 
+        // MyGitGUI: background commands (auto-fetch) must not open credential prompts such as
+        // Git Credential Manager's account picker; they fail instead.
+        public bool NonInteractive { get; set; } = false;
+
         public async Task<bool> ExecAsync()
         {
             Log?.AppendLine($"$ git {Args}\n");
@@ -124,9 +128,12 @@ namespace SourceGit.Commands
                 return Result.Failed(e.Message);
             }
 
+            // MyGitGUI: read both pipes at once. Reading stdout to the end first deadlocks when the
+            // child (git-lfs retrying a failed sign-in, credential helpers) fills the stderr pipe.
             var rs = new Result() { IsSuccess = true };
+            var stderr = proc.StandardError.ReadToEndAsync();
             rs.StdOut = proc.StandardOutput.ReadToEnd();
-            rs.StdErr = proc.StandardError.ReadToEnd();
+            rs.StdErr = stderr.GetAwaiter().GetResult();
             proc.WaitForExit();
 
             rs.IsSuccess = proc.ExitCode == 0;
@@ -147,9 +154,12 @@ namespace SourceGit.Commands
                 return Result.Failed(e.Message);
             }
 
+            // MyGitGUI: read both pipes at once (see ReadToEnd).
             var rs = new Result() { IsSuccess = true };
-            rs.StdOut = await proc.StandardOutput.ReadToEndAsync(CancellationToken).ConfigureAwait(false);
-            rs.StdErr = await proc.StandardError.ReadToEndAsync(CancellationToken).ConfigureAwait(false);
+            var stdout = proc.StandardOutput.ReadToEndAsync(CancellationToken);
+            var stderr = proc.StandardError.ReadToEndAsync(CancellationToken);
+            rs.StdOut = await stdout.ConfigureAwait(false);
+            rs.StdErr = await stderr.ConfigureAwait(false);
             await proc.WaitForExitAsync(CancellationToken).ConfigureAwait(false);
 
             rs.IsSuccess = proc.ExitCode == 0;
@@ -209,6 +219,16 @@ namespace SourceGit.Commands
             // If an SSH private key was provided, sets the environment.
             if (!start.Environment.ContainsKey("GIT_SSH_COMMAND") && !string.IsNullOrEmpty(SSHKey))
                 start.Environment.Add("GIT_SSH_COMMAND", $"ssh -i '{SSHKey}' -o AddKeysToAgent=yes");
+
+            // MyGitGUI: no credential prompts for background commands.
+            if (NonInteractive)
+            {
+                start.Environment["GCM_INTERACTIVE"] = "never";
+                start.Environment["GIT_TERMINAL_PROMPT"] = "0";
+                // Git falls back to SSH_ASKPASS (this app) for credential prompts even with
+                // GIT_TERMINAL_PROMPT=0; this flag makes the askpass instance fail at once.
+                start.Environment["MYGITGUI_ASKPASS_NONINTERACTIVE"] = "TRUE";
+            }
 
             // Force using en_US.UTF-8 locale
             if (OperatingSystem.IsLinux())
