@@ -324,7 +324,7 @@ namespace SourceGit.ViewModels
                     if (c.IsConflicted)
                         conflicts.Add(c);
 
-                    if (noFilter || c.Path.Contains(_filter, StringComparison.OrdinalIgnoreCase))
+                    if (noFilter || MatchesFilter(c))
                     {
                         visibleUnstaged.Add(c);
                         if (lastSelectedUnstaged.Contains(c.Path))
@@ -378,6 +378,14 @@ namespace SourceGit.ViewModels
             UpdateInProgressState();
             UpdateDetail();
             UpdateLevelNotice();
+        }
+
+        /// <summary>
+        ///     MyGitGUI: the conflicted actor files of one level, merged together in Unreal.
+        /// </summary>
+        public List<Models.Change> GetLevelConflicts(string actorsFolder)
+        {
+            return _cached.FindAll(x => x.IsConflicted && x.UnrealActor?.ActorsFolder == actorsFolder);
         }
 
         /// <summary>
@@ -783,11 +791,18 @@ namespace SourceGit.ViewModels
 
             foreach (var c in changes)
             {
-                if (c.Path.Contains(_filter, StringComparison.OrdinalIgnoreCase))
+                if (MatchesFilter(c))
                     visible.Add(c);
             }
 
             return visible;
+        }
+
+        // MyGitGUI: actor files are also found by their actor name.
+        private bool MatchesFilter(Models.Change c)
+        {
+            return c.Path.Contains(_filter, StringComparison.OrdinalIgnoreCase) ||
+                   (c.UnrealActor?.Label?.Contains(_filter, StringComparison.OrdinalIgnoreCase) ?? false);
         }
 
         private async Task<List<Models.Change>> GetCanStageChangesAsync(List<Models.Change> changes)

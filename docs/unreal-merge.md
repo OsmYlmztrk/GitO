@@ -47,6 +47,22 @@ powershell -ExecutionPolicy Bypass -File unreal\build-plugin.ps1 -EngineVersion 
 - **Panel slots fold into their widget:** a `PanelSlot`'s properties are keyed `inner/<widget path>/Slot.<prop>`; the panel's `Slots` list and the slot's `Content`/`Parent` are skipped. Adding a widget is one listed change. Values show inner object references by name (`ShortObjectNames`).
 - **Still not compared (silent):** timeline templates and curves (`Blueprint->Timelines`, outer is the generated class), contents of inherited component override templates, function local variables and other non-editable `UK2Node_FunctionEntry` data unless the entry node is replaced.
 
+## Level merge (One File Per Actor levels)
+Decided with the user (2026-10-14): scene merges are done **by the user in Unreal, never automatically**; GitO only asks for it. Levels that keep all actors in one `.umap` aren't merged (GitO suggests turning on One File Per Actor).
+
+1. GitO: a conflicted actor file (`Change.UnrealActor`) shows a "Level <name>" card listing every conflicted actor of that level; no Take Ours / Take Theirs. **Resolve level in Unreal** runs `ViewModels/UnrealLevelMerge.cs`.
+2. GitO extracts Base/Ours/Theirs of each actor (`CheckoutConflictStages`), writes ours into the working copy of both-modified actors (`git checkout --ours`, stays conflicted), writes a manifest (`Models/UnrealLevelMergeReport.cs`: `UnrealLevelMergeManifest`) and starts `UnrealEditor.exe <project> <level package> -GitLevelMergeUI -Manifest= -Report= -PLUGIN= -EnablePlugins=GitBlueprintMerge`.
+3. Plugin (`GitBlueprintMergeModule.cpp` → `FLevelMergeSession` in `LevelMerge.*`): opens the level if needed, loads base/ours/theirs of each actor side by side (transient world per revision + `FLinkerInstancingContext` mapping the level package), compares editable actor and component properties as full text, and loads the live actors (`FLoaderAdapterActorList` for World Partition).
+4. `SGitLevelMergeWindow` (user requests 2026-10-15: categories, choose-all, "neither", warnings):
+   - Left: actors in two sections, "changed on both sides" and "deleted on one side" (header rows aren't selectable).
+   - Right: changed properties grouped by the property's top `Category` metadata, then component. Columns Property (component below) | Change (`ELevelChangeKind`: Both changed red, Ours / Theirs changed, Same on both) | Base | Ours | Theirs | In level (live value, re-read every frame) | Use.
+   - Choices: `ELevelChoice` Ours / Theirs / Level ("Neither": keeps whatever the live actor has, so the user can set it in Details). Ours/Theirs are applied to the live actor at once (`ImportText` + `PostEditChangeProperty`) and the resulting live text is kept in `Applied`; a later different live value = edited by hand (amber + warning icon, counted in the footer).
+   - Choose-all toggles (`ChooseAll` / `IsAllChosen`) on each category header, the actor header ("This actor") and the top ("Whole level"). Keep / delete decisions take Ours/Theirs only; Neither leaves them.
+   - Deleted on one side: Keep/Delete (a deleted actor is only hidden), a warning when Delete is chosen, and the properties the other side changed since base (`KeptSideChanges`, read-only).
+   - Merge is enabled when everything is decided; it shows a summary dialog first (saved / deleted actors, Neither values, hand edits, other dirty packages from `FEditorFileUtils::GetDirty*Packages`), then saves kept actors (`UEditorLoadingAndSavingUtils::SavePackages`), writes the report (`written`, per actor `saved` / `unchanged` / `deleted`) and quits.
+   - Cancel, the window's X (`SetRequestDestroyWindowOverride`) and closing the editor (`IMainFrameModule::RegisterCanCloseEditor`) ask first when choices were made; then dirty flags are cleared and the report says not written.
+5. GitO stages saved/unchanged actors and `git rm`s deleted ones. It refuses to start while an `UnrealEditor` process runs (that editor would hold the old actors). "Not merged" outcomes are orange warnings (`Repository.SendWarning`, `Notification.IsWarning`), not green notices.
+
 ## Plugin architecture
 Pipeline: **load 3 revisions → snapshot each into facts → plan (3-way per fact + grouping) → resolve choices → apply theirs onto a fresh copy of ours → compile/save → report**.
 
@@ -140,6 +156,7 @@ UnrealEditor.exe <uproject> -GitBlueprintMergeUI <same> -OursLabel= -TheirsLabel
 | `src/Views/Conflict.axaml(.cs)` | — | "Unreal Editor" card: 3-step explanation, ⓘ flyout "What Merge in Unreal can combine", buttons, last-run status, change list. **Keep the flyout text in sync with the supported-kinds table above.** |
 | `src/Views/UnrealMerge.axaml(.cs)` | — | popup view |
 | `src/Models/UnrealLevel.cs` | `UnrealLevel` | One File Per Actor check of a level: `__ExternalActors__/<level path>` folder in the working copy (`UsesOneFilePerActor`) or in a commit (`UsesOneFilePerActorAsync`, `Commands/IsPathInRevision`). Feeds `Conflict.LevelNotice` (both sides one file / converted on one side only) and `WorkingCopy.LevelNoticePath` (Local Changes note, dismissed per level in `RepositoryUIStates.DismissedLevelNotices`). Levels are merged only when both sides use OFPA |
+| `src/Models/UnrealActorInfo.cs` | `UnrealActorInfo` | Actor label and class of an OFPA actor file, read from its asset registry tags (`ActorLabel`, `ActorMetaDataClass`; key FString directly followed by the value FString, the name-table copy of the key is skipped). Source: working file, the local LFS object when the file is a pointer (conflict: first oid = ours), `git show HEAD:` for deletions. Cached by path/size/mtime or oid. `Fill` runs in `Repository.RefreshWorkingCopyChanges` and sets `Change.UnrealActor` (used by `ChangeCollectionView`, `ChangeTreeNode`, `Conflict.Actor`, the Local Changes filter) |
 | `src/ViewModels/ConvertLevelToExternalActors.cs`, `src/Views/ConvertLevelToExternalActors.axaml` | `ConvertLevelToExternalActors : Popup` | "Turn it on..." on the Local Changes note: warnings, optional LFS lock, then the engine's own `-run=ConvertLevelsToExternalActors <package> -nosourcecontrol` (it clears read-only and saves the level + one package per actor). Refuses while any `UnrealEditor` process runs. Success = `Conversion took` in the log, errors = `LogConvertLevelsToExternalActorsCommandlet: Error:` lines (exit code is unreliable). Doesn't turn on actor folder objects, unlike the World Settings checkbox |
 | `src/App.axaml.cs` | `App.RequestAttention()` | flash the taskbar and chime when the app is in the background |
 
@@ -151,6 +168,13 @@ The test project is `C:\Users\osman\OneDrive\Belgeler\Unreal Projects\MergeLab\M
 -run=GitBlueprintMergeTestCase -BlueprintFixture -OutDir=<dir>   -> BP_Fixture_{Base,Ours,Theirs}.uasset
 -run=GitBlueprintMergeTestCase -WidgetFixture -OutDir=<dir>      -> WBP_Fixture_* (theirs: Class Setting merged; title text + new button listed as unsupported)
 -run=GitBlueprintMergeTestCase -AnimFixture -OutDir=<dir>        -> ABP_Fixture_* (template ABP; theirs: Slot node setting + Class Setting, all merge)
+-run=GitBlueprintMergeTestCase -ActorLoadCheck -Level=/Game/<Map> -Base=<f> -Ours=<f> -Theirs=<f>
+                                                                 -> loads 3 revisions of one OFPA actor side by side (transient world per revision +
+                                                                    FLinkerInstancingContext level mapping), logs "DIFF key | base | ours | theirs"
+-run=GitBlueprintMergeTestCase -LevelMergeCheck -Manifest=<json> [-Choose=ours|theirs|level -Report=<json>]
+                                                                 -> level merge session without its window: logs "LEVEL actor/changes"
+                                                                    ([category] component name kind presence | base | ours | theirs);
+                                                                    with -Choose decides everything that way (ChooseAll) and saves (as Merge would)
 -run=GitBlueprintMergeTestCase -Dump=<file>                      -> logs "FACT key = value" for every fact
 -run=GitBlueprintMergeTestCase -CopyCheck -Ours=<bp> -Theirs=<bp> -> CopyNodes of theirs' function calls into ours, logs "COPY ..." (what the window's copy/drag does)
 -run=GitBlueprintMergeTestCase -Base=<BP_Test> -OutDir= -PackageName=   (legacy BP_Test scenario)

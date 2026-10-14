@@ -150,7 +150,15 @@
       <Border Grid.Row="0" Padding="12,0" Background="{DynamicResource Brush.SubPanel}" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource Brush.Border2}">
         <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto">
           <Path Grid.Column="0" Width="13" Height="13" Data="{StaticResource Icons.File}" Fill="{DynamicResource Brush.FG2}"/>
-          <TextBlock Grid.Column="1" Margin="8,0" Text="{Binding FilePath}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+          <TextBlock Grid.Column="1" Margin="8,0" Text="{Binding FilePath}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                     IsVisible="{Binding Actor, Converter={x:Static ObjectConverters.IsNull}}"/>
+          <!-- MyGitGUI: actor name and class instead of the hashed file name; the real path is in the tooltip -->
+          <TextBlock Grid.Column="1" Margin="8,0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                     ToolTip.Tip="{Binding FilePath}"
+                     IsVisible="{Binding Actor, Converter={x:Static ObjectConverters.IsNotNull}}">
+            <Run Text="{Binding Actor.Label}" FontWeight="SemiBold"/>
+            <Run Text="{Binding Actor.Detail}" Foreground="{DynamicResource Brush.FG2}"/>
+          </TextBlock>
 
           <Border Grid.Column="2" Classes="chip" Background="#18888888" BorderBrush="{DynamicResource Brush.Border1}" IsVisible="{Binding IsBinary}">
             <TextBlock Text="Binary" Foreground="{DynamicResource Brush.FG2}"/>
@@ -175,16 +183,13 @@
           <!-- Explanation -->
           <Grid ColumnDefinitions="Auto,*">
             <Path Grid.Column="0" Width="14" Height="14" VerticalAlignment="Top" Margin="0,2,0,0" Data="{StaticResource Icons.Error}" Fill="#FFD19A3A"/>
+            <!-- MyGitGUI: text depends on the conflict kind (deleted on one side, both changed, ...) -->
             <TextBlock Grid.Column="1" Margin="8,0,0,0" TextWrapping="Wrap" Foreground="{DynamicResource Brush.FG2}"
-                       Text="This binary asset changed on both sides and can't be merged line by line. Keep one version, or merge both in your external merge tool (e.g. Unreal Editor)."
-                       IsVisible="{Binding IsBinary}"/>
-            <TextBlock Grid.Column="1" Margin="8,0,0,0" TextWrapping="Wrap" Foreground="{DynamicResource Brush.FG2}"
-                       Text="Both sides changed this file. Open the merge editor to pick changes chunk by chunk, or keep one side entirely."
-                       IsVisible="{Binding !IsBinary}"/>
+                       Text="{Binding Explanation}"/>
           </Grid>
 
-          <!-- Ours / Theirs -->
-          <UniformGrid Columns="2" ColumnSpacing="14">
+          <!-- Ours / Theirs (MyGitGUI: not for level actors; those are merged in Unreal only) -->
+          <UniformGrid Columns="2" ColumnSpacing="14" IsVisible="{Binding !IsLevelActor}">
             <Border Classes="card" BorderBrush="#734C9AFF">
               <StackPanel Orientation="Vertical">
                 <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
@@ -235,8 +240,56 @@
             </Grid>
           </Border>
 
+          <!-- MyGitGUI: actor of a One File Per Actor level: all its conflicted actors are merged together in Unreal -->
+          <Border Classes="card" IsVisible="{Binding IsLevelActor}">
+            <StackPanel Orientation="Vertical" Spacing="8">
+              <StackPanel Orientation="Horizontal" Spacing="8">
+                <Path Width="14" Height="14" Data="{StaticResource Icons.Diff}"/>
+                <TextBlock FontWeight="SemiBold">
+                  <Run Text="Level"/>
+                  <Run Text="{Binding Actor.Level}"/>
+                </TextBlock>
+                <Border Classes="chip" BorderBrush="{DynamicResource Brush.Border2}">
+                  <TextBlock>
+                    <Run Text="{Binding LevelActors.Count, Mode=OneWay}"/>
+                    <Run Text="actor(s)"/>
+                  </TextBlock>
+                </Border>
+              </StackPanel>
+
+              <ItemsControl ItemsSource="{Binding LevelActors}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate DataType="m:Change">
+                    <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,2">
+                      <TextBlock Text="{Binding ConflictMarker}" Foreground="DarkOrange" FontWeight="Bold"/>
+                      <TextBlock Text="{Binding DisplayFileName}"/>
+                      <TextBlock Text="{Binding UnrealActor.ClassName}" Foreground="{DynamicResource Brush.FG2}"/>
+                    </StackPanel>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+
+              <TextBlock Classes="how" Text="Merged together in Unreal. You decide every change."/>
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <Path Width="12" Height="12" Data="{StaticResource Icons.Error}" Fill="#FF9800"/>
+                <TextBlock Classes="how" Text="Save your work and close Unreal first."/>
+              </StackPanel>
+              <TextBlock Classes="how" IsVisible="{Binding !HasMergePlugin}"
+                         Text="Needs the GitBlueprintMerge plugin (Unreal 5.8)."/>
+
+              <Button Classes="flat primary" Height="28" Padding="10,0" HorizontalAlignment="Left"
+                      Click="OnResolveLevelInUnreal" IsEnabled="{Binding CanResolveLevel}"
+                      ToolTip.Tip="Opens the level in Unreal with every conflicted actor of it">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                  <Path Width="12" Height="12" Data="{StaticResource Icons.Merge}" Fill="White"/>
+                  <TextBlock Text="Resolve level in Unreal" Foreground="White"/>
+                </StackPanel>
+              </Button>
+            </StackPanel>
+          </Border>
+
           <!-- Unreal Editor -->
-          <Border Classes="card" IsVisible="{Binding IsUnrealAsset}">
+          <Border Classes="card" IsVisible="{Binding ShowUnrealCard}">
             <StackPanel Orientation="Vertical" Spacing="8">
               <Grid ColumnDefinitions="Auto,Auto,*,Auto">
                 <Path Grid.Column="0" Width="14" Height="14" Data="{StaticResource Icons.Diff}"/>
@@ -385,7 +438,7 @@
           </Border>
 
           <!-- Merge -->
-          <Border Classes="card">
+          <Border Classes="card" IsVisible="{Binding !IsLevelActor}">
             <StackPanel Orientation="Vertical" Spacing="8">
               <StackPanel Orientation="Horizontal" Spacing="8">
                 <Path Width="14" Height="14" Data="{StaticResource Icons.Conflict}"/>

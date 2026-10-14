@@ -62,6 +62,8 @@ namespace SourceGit
         ]
     )]
     [JsonSerializable(typeof(Models.BlueprintMergeReport))]
+    [JsonSerializable(typeof(Models.UnrealLevelMergeReport))]
+    [JsonSerializable(typeof(Models.UnrealLevelMergeManifest))]
     [JsonSerializable(typeof(Models.ConflictRadarStore))]
     [JsonSerializable(typeof(Models.ExternalToolCustomization))]
     [JsonSerializable(typeof(Models.InteractiveRebaseJobCollection))]

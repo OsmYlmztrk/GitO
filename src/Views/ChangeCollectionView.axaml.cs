@@ -474,6 +474,13 @@ namespace SourceGit.Views
         private void UpdateRowTips(Control control, Models.Change change)
         {
             var tip = new TextBlock() { TextWrapping = TextWrapping.Wrap };
+            if (change.UnrealActor is { } actor)
+            {
+                // MyGitGUI: the actor behind a hashed One File Per Actor file
+                tip.Inlines!.Add(new Run(actor.Label) { FontWeight = FontWeight.Bold });
+                tip.Inlines!.Add(new Run($" ({actor.Detail})") { Foreground = Brushes.Gray });
+                tip.Inlines!.Add(new LineBreak());
+            }
             tip.Inlines!.Add(new Run(change.Path));
             tip.Inlines!.Add(new Run(" • ") { Foreground = Brushes.Gray });
             tip.Inlines!.Add(new Run(IsUnstagedChange ? change.WorkTreeDesc : change.IndexDesc) { Foreground = Brushes.Gray });

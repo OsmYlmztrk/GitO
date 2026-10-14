@@ -98,6 +98,16 @@ By default a level (`.umap`) keeps all its actors in one file. Two people who ed
 
 With **One File Per Actor** each actor is saved as its own small file under `Content/__ExternalActors__/<level path>/`. People who edit different actors no longer conflict; only two edits to the same actor do. GitO merges a level only when both sides use One File Per Actor. Mixing the two layouts is not supported.
 
+Unreal names actor files with hashes (`KDQKXSPLQ9292KQZ84OBHK.uasset`). In Local Changes and on the conflict panel GitO shows the actor's name and class instead (`Light_Main  PointLight`), grouped under `<level> · actors`; the real path is in the tooltip, and the filter box finds actors by name.
+
+**Conflicted actors** are merged in Unreal, all actors of a level together, by you: save your work and close Unreal, then click any of them in GitO and press **Resolve level in Unreal**. Unreal opens the level with a merge window:
+- **Left:** the conflicted actors, in two groups: changed on both sides, and deleted on one side.
+- **Right:** the selected actor's changed properties, grouped by Details category (Transform, Light, Rendering, ...). Each row says who changed it (**Both changed**, **Ours changed**, **Theirs changed**, **Same on both**) and shows Base, Ours, Theirs and the value **In level** now.
+- **Choices:** for every change pick **Ours**, **Theirs** or **Neither**. Neither keeps the level's current value, which you can set by hand in the Details panel. The same three buttons on a category row, next to **This actor** and next to **Whole level** choose for all of them at once.
+- **Deleted on one side:** pick **Keep** or **Delete**; the window lists what the other side changed. Delete warns that the actor's file is removed.
+- Nothing is chosen for you, and the level shows each choice right away. A value edited in the level after you chose a side is marked in amber; the level's value is saved.
+- **Merge** shows a summary first (saved and deleted actors, Neither values, hand edits, other unsaved changes in Unreal), then saves the actors and GitO stages them. **Cancel**, the window's X or closing Unreal asks first and leaves everything conflicted.
+
 GitO tells you when a level isn't set up this way:
 - **Local Changes:** a yellow note when you change such a level. **Turn it on...** lists what to check first; after you press OK, GitO converts the level with Unreal in the background (Unreal Editor must be closed; it can lock the level with Git LFS first). Nothing is committed: commit the level with the new actor files yourself. **I'll do it myself in Unreal** opens this section instead. **Don't show again** turns the note off for that level.
 - **Conflict panel:** a note on a conflicted level. If One File Per Actor was turned on in only one of the two branches, the note says which one: take that side, then redo the other branch's changes to the level in Unreal.

@@ -10,6 +10,9 @@ namespace SourceGit.ViewModels
         public string DisplayName { get; set; }
         public int Depth { get; private set; } = 0;
         public Models.Change Change { get; set; } = null;
+
+        // MyGitGUI: class of an Unreal actor file, shown dimmed after its actor name.
+        public string Detail => Change?.UnrealActor?.ClassName ?? string.Empty;
         public List<ChangeTreeNode> Children { get; set; } = new List<ChangeTreeNode>();
 
         public bool IsFolder
@@ -36,7 +39,7 @@ namespace SourceGit.ViewModels
         public ChangeTreeNode(Models.Change c)
         {
             FullPath = c.Path;
-            DisplayName = Path.GetFileName(c.Path);
+            DisplayName = c.DisplayFileName;
             Change = c;
             IsExpanded = false;
         }
@@ -55,7 +58,9 @@ namespace SourceGit.ViewModels
 
             foreach (var c in changes)
             {
-                var sepIdx = c.Path.IndexOf('/');
+                // MyGitGUI: actor files skip their two hash folders and sit right under the level's actors folder.
+                var treePath = c.UnrealActor != null ? $"{c.UnrealActor.ActorsFolder}/{Path.GetFileName(c.Path)}" : c.Path;
+                var sepIdx = treePath.IndexOf('/');
                 if (sepIdx == -1)
                 {
                     nodes.Add(new ChangeTreeNode(c));
@@ -66,7 +71,7 @@ namespace SourceGit.ViewModels
 
                     while (sepIdx != -1)
                     {
-                        var folder = c.Path.Substring(0, sepIdx);
+                        var folder = treePath.Substring(0, sepIdx);
                         if (folders.TryGetValue(folder, out var value))
                         {
                             lastFolder = value;
@@ -85,7 +90,10 @@ namespace SourceGit.ViewModels
                             lastFolder = cur;
                         }
 
-                        sepIdx = c.Path.IndexOf('/', sepIdx + 1);
+                        if (c.UnrealActor != null && folder == c.UnrealActor.ActorsFolder)
+                            lastFolder.DisplayName = $"{c.UnrealActor.Level} · actors";
+
+                        sepIdx = treePath.IndexOf('/', sepIdx + 1);
                     }
 
                     lastFolder?.Children.Add(new ChangeTreeNode(c));

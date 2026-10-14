@@ -84,7 +84,7 @@
         </StackPanel>
         <StackPanel Orientation="Horizontal" Spacing="6">
           <TextBlock Text="Son" VerticalAlignment="Center"/>
-          <NumericUpDown Width="112" Height="28" Minimum="1" Maximum="90" Increment="1" FormatString="0"
+          <NumericUpDown Width="48" Height="28" Minimum="1" Maximum="90" Increment="1" FormatString="0" ShowButtonSpinner="False"
                          Padding="4" VerticalContentAlignment="Center" HorizontalContentAlignment="Center"
                          BorderThickness="1" BorderBrush="{DynamicResource Brush.Border1}"
                          Value="{Binding ActiveDays, Mode=TwoWay}"/>

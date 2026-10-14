@@ -70,6 +70,14 @@ namespace SourceGit.Views
                 await vm.CompareInUnrealAsync();
         }
 
+        private async void OnResolveLevelInUnreal(object _, RoutedEventArgs e)
+        {
+            e.Handled = true;
+
+            if (DataContext is ViewModels.Conflict vm)
+                await vm.ResolveLevelInUnrealAsync();
+        }
+
         private async void OnMergeInUnreal(object _, RoutedEventArgs e)
         {
             e.Handled = true;

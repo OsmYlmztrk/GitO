@@ -55,6 +55,13 @@
         public string WorkTreeDesc => TYPE_DESCS[(int)WorkTree];
         public string IndexDesc => TYPE_DESCS[(int)Index];
 
+        // MyGitGUI: readable name of an Unreal actor file (One File Per Actor); only set for local changes.
+        public UnrealActorInfo UnrealActor { get; set; } = null;
+        public bool IsUnrealActor => UnrealActor != null;
+        public string DisplayFileName => UnrealActor?.Label ?? System.IO.Path.GetFileName(Path);
+        public string DisplayDirectory => UnrealActor != null ? UnrealActor.ActorsFolder : (System.IO.Path.GetDirectoryName(Path) ?? string.Empty);
+        public string DisplayPath => UnrealActor != null ? $"{UnrealActor.ActorsFolder}/{UnrealActor.Label}" : Path;
+
         public void Set(ChangeState index, ChangeState workTree = ChangeState.None)
         {
             Index = index;

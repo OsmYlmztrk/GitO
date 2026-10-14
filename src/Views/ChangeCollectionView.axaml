@@ -73,6 +73,12 @@
 
               <TextBlock Text="{Binding DisplayName, Mode=OneWay}"
                          Margin="4,0,0,0"/>
+
+              <!-- MyGitGUI: class of an Unreal actor file -->
+              <TextBlock Text="{Binding Detail, Mode=OneWay}"
+                         Foreground="{DynamicResource Brush.FG2}"
+                         Margin="6,0,0,0"
+                         IsVisible="{Binding Detail, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
             </StackPanel>
           </DataTemplate>
         </ListBox.ItemTemplate>
@@ -102,10 +108,16 @@
                          FontWeight="Bold"
                          Margin="4,0,0,0" IsVisible="{Binding IsConflicted}"/>
 
-              <TextBlock Text="{Binding Path, Converter={x:Static c:PathConverters.PureFileName}}"
+              <!-- MyGitGUI: Unreal actor files show their actor name and class -->
+              <TextBlock Text="{Binding DisplayFileName}"
                          Margin="4,0,0,0"/>
 
-              <TextBlock Text="{Binding Path, Converter={x:Static c:PathConverters.PureDirectoryName}}"
+              <TextBlock Text="{Binding UnrealActor.ClassName}"
+                         Foreground="{DynamicResource Brush.FG2}"
+                         Margin="6,0,0,0"
+                         IsVisible="{Binding IsUnrealActor}"/>
+
+              <TextBlock Text="{Binding DisplayDirectory}"
                          Foreground="{DynamicResource Brush.FG2}"
                          Margin="4,0,0,0"/>
             </StackPanel>
@@ -139,7 +151,13 @@
                          IsVisible="{Binding IsConflicted}"/>
 
               <TextBlock Margin="4,0,0,0"
-                         Text="{Binding Path}"/>
+                         Text="{Binding DisplayPath}"/>
+
+              <!-- MyGitGUI: class of an Unreal actor file -->
+              <TextBlock Text="{Binding UnrealActor.ClassName}"
+                         Foreground="{DynamicResource Brush.FG2}"
+                         Margin="6,0,0,0"
+                         IsVisible="{Binding IsUnrealActor}"/>
             </StackPanel>
           </DataTemplate>
         </ListBox.ItemTemplate>

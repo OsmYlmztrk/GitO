@@ -29,9 +29,16 @@
 #include "Kismet2/KismetEditorUtilities.h"
 #include "BlueprintMergeApply.h"
 #include "ScopedTransaction.h"
+#include "LevelMerge.h"
 #include "MergeSession.h"
 #include "Misc/Paths.h"
+#include "GameFramework/Actor.h"
+#include "HAL/FileManager.h"
+#include "Misc/PackageName.h"
+#include "Misc/PackagePath.h"
+#include "UObject/LinkerInstancingContext.h"
 #include "UObject/Package.h"
+#include "UObject/UObjectHash.h"
 #include "UObject/SavePackage.h"
 #include "WorldPartition/DataLayer/DataLayerAsset.h"
 
@@ -84,6 +91,159 @@ namespace
 		if (!Memory)
 			Memory = FDataTableEditorUtils::AddRow(Table, FName(Row));
 		SetText(Table->GetRowStruct(), Memory, Table, Field, Value);
+	}
+
+	/** Editable properties of an actor and its components as text, keyed actor/<prop> and comp/<component>/<prop>. */
+	TMap<FString, FString> ActorFacts(AActor* Actor, const FString& TempLevel, const FString& Level, const FString& TempPackage)
+	{
+		TMap<FString, FString> Facts;
+		auto Add = [&](const FString& Prefix, UObject* Object)
+		{
+			UObject* Defaults = Object->GetClass()->GetDefaultObject();
+			for (TFieldIterator<FProperty> It(Object->GetClass()); It; ++It)
+			{
+				if (!It->HasAnyPropertyFlags(CPF_Edit) || It->HasAnyPropertyFlags(CPF_Transient))
+					continue;
+				FString Value;
+				It->ExportText_InContainer(0, Value, Object, Defaults, Object, PPF_None);
+				Value.ReplaceInline(*TempLevel, *Level);
+				Value.ReplaceInline(*TempPackage, TEXT("<self>"));
+				Facts.Add(Prefix + It->GetName(), Value);
+			}
+		};
+
+		Add(TEXT("actor/"), Actor);
+		for (UActorComponent* Component : Actor->GetComponents())
+			Add(FString::Printf(TEXT("comp/%s/"), *Component->GetName()), Component);
+		return Facts;
+	}
+
+	/**
+	 * -ActorLoadCheck -Level=/Game/Map -Base= -Ours= -Theirs=: spike for level merges. Loads three revisions of one
+	 * external actor package side by side; each gets its own transient world, and an instancing context maps the
+	 * level package the actor imports (its outer PersistentLevel) to that world. Logs the facts that differ.
+	 */
+	int32 ActorLoadCheck(const FString& Level, const FString& BaseFile, const FString& OursFile, const FString& TheirsFile)
+	{
+		const FString LevelName = FPackageName::GetShortName(Level);
+		const TCHAR* Labels[] = {TEXT("Base"), TEXT("Ours"), TEXT("Theirs")};
+		const FString Files[] = {BaseFile, OursFile, TheirsFile};
+		TMap<FString, FString> Facts[3];
+
+		for (int32 Index = 0; Index < 3; ++Index)
+		{
+			const FString Guid = FGuid::NewGuid().ToString();
+			const FString TempLevel = FString::Printf(TEXT("/Temp/GBMLevel_%s_%s/%s"), Labels[Index], *Guid, *LevelName);
+			UPackage* WorldPackage = CreatePackage(*TempLevel);
+			WorldPackage->SetFlags(RF_Transient);
+			UWorld* World = UWorld::CreateWorld(EWorldType::Inactive, false, FName(*LevelName), WorldPackage, false, ERHIFeatureLevel::Num, nullptr, true);
+
+			const FString TempFile = FPaths::Combine(FPaths::DiffDir(), FString::Printf(TEXT("GBMActor_%s_%s"), Labels[Index], *Guid)) + FPackageName::GetAssetPackageExtension();
+			if (IFileManager::Get().Copy(*TempFile, *Files[Index]) != COPY_OK)
+			{
+				UE_LOG(LogGitBlueprintMergeTestCase, Error, TEXT("ACTOR %s: could not copy %s"), Labels[Index], *Files[Index]);
+				return 2;
+			}
+
+			FLinkerInstancingContext Context;
+			Context.AddPackageMapping(FName(*Level), FName(*TempLevel));
+			UPackage* Package = LoadPackage(nullptr, FPackagePath::FromLocalPath(TempFile), LOAD_None, nullptr, &Context);
+
+			AActor* Actor = nullptr;
+			if (Package)
+			{
+				ForEachObjectWithPackage(Package, [&Actor](UObject* Object)
+				{
+					Actor = Cast<AActor>(Object);
+					return Actor == nullptr;
+				}, EGetObjectsFlags::None);
+			}
+
+			if (!Actor)
+			{
+				UE_LOG(LogGitBlueprintMergeTestCase, Error, TEXT("ACTOR %s: no actor loaded (package %s)"), Labels[Index], Package ? *Package->GetName() : TEXT("null"));
+				return 2;
+			}
+
+			UE_LOG(LogGitBlueprintMergeTestCase, Display, TEXT("ACTOR %s: %s (%s) outer=%s world=%s components=%d"), Labels[Index], *Actor->GetActorLabel(),
+				*Actor->GetClass()->GetName(), *Actor->GetOuter()->GetPathName(), *World->GetPathName(), Actor->GetComponents().Num());
+			Facts[Index] = ActorFacts(Actor, TempLevel, Level, Package->GetName());
+		}
+
+		TSet<FString> Keys;
+		for (const TMap<FString, FString>& Map : Facts)
+		{
+			for (const TPair<FString, FString>& Pair : Map)
+				Keys.Add(Pair.Key);
+		}
+
+		int32 Differences = 0;
+		for (const FString& Key : Keys)
+		{
+			const FString* Base = Facts[0].Find(Key);
+			const FString* Ours = Facts[1].Find(Key);
+			const FString* Theirs = Facts[2].Find(Key);
+			auto Text = [](const FString* Value) { return Value ? *Value : FString(TEXT("<none>")); };
+			if (Text(Base) != Text(Ours) || Text(Base) != Text(Theirs))
+			{
+				++Differences;
+				UE_LOG(LogGitBlueprintMergeTestCase, Display, TEXT("DIFF %s | base=%s | ours=%s | theirs=%s"), *Key, *Text(Base), *Text(Ours), *Text(Theirs));
+			}
+		}
+
+		UE_LOG(LogGitBlueprintMergeTestCase, Display, TEXT("ACTOR facts: %d, differing: %d"), Facts[1].Num(), Differences);
+		return 0;
+	}
+
+	/**
+	 * -LevelMergeCheck -Manifest=<json> [-Choose=ours|theirs|level] [-Report=<json>]: runs the level merge session
+	 * without its window. Logs every actor and change; with -Choose it decides everything that way and saves.
+	 */
+	int32 LevelMergeCheck(const FString& ManifestFile, const FString& Choose, const FString& ReportFile)
+	{
+		using namespace GitBlueprintMerge;
+
+		FLevelMergeSession Session;
+		if (!Session.Load(ManifestFile))
+			return 2;
+
+		TArray<FLevelActor>& Actors = Session.GetActors();
+		for (int32 ActorIndex = 0; ActorIndex < Actors.Num(); ++ActorIndex)
+		{
+			const FLevelActor& Actor = Actors[ActorIndex];
+			UE_LOG(LogGitBlueprintMergeTestCase, Display, TEXT("LEVEL actor %s (%s) live=%s base=%d ours=%d theirs=%d existence=%d changes=%d"),
+				*Actor.Label, *Actor.ClassName, Actor.Live.IsValid() ? *Actor.Live->GetPathName() : TEXT("none"),
+				Actor.bInBase, Actor.bInOurs, Actor.bInTheirs, Actor.bExistenceConflict, Actor.Changes.Num());
+			for (const FLevelChange& Change : Actor.Changes)
+			{
+				UE_LOG(LogGitBlueprintMergeTestCase, Display, TEXT("LEVEL   [%s] %s %s kind=%d in=%d%d%d | base=%s | ours=%s | theirs=%s"),
+					*Change.Category, *Change.Component, *Change.Name, (int32)Change.Kind, Change.bInBase, Change.bInOurs, Change.bInTheirs, *Change.Base, *Change.Ours, *Change.Theirs);
+			}
+			for (const FLevelChange& Change : Actor.KeptSideChanges)
+				UE_LOG(LogGitBlueprintMergeTestCase, Display, TEXT("LEVEL   kept side: [%s] %s %s | base=%s | now=%s"), *Change.Category, *Change.Component, *Change.Name, *Change.Base, Actor.bInOurs ? *Change.Ours : *Change.Theirs);
+		}
+		for (const FString& Problem : Session.GetProblems())
+			UE_LOG(LogGitBlueprintMergeTestCase, Warning, TEXT("LEVEL problem: %s"), *Problem);
+
+		if (Choose.IsEmpty())
+			return 0;
+
+		// "ours" first takes theirs, so every value is written back; "level" keeps every value as the level has it,
+		// keep / delete decisions then take ours.
+		const ELevelChoice Choice = Choose == TEXT("theirs") ? ELevelChoice::Theirs : Choose == TEXT("level") ? ELevelChoice::Level : ELevelChoice::Ours;
+		if (Choice == ELevelChoice::Ours)
+			Session.ChooseAll(INDEX_NONE, FString(), ELevelChoice::Theirs);
+		if (Choice == ELevelChoice::Level)
+			Session.ChooseAll(INDEX_NONE, FString(), ELevelChoice::Ours);
+		Session.ChooseAll(INDEX_NONE, FString(), Choice);
+		UE_LOG(LogGitBlueprintMergeTestCase, Display, TEXT("LEVEL all %s: %d, edited in level: %d, other dirty packages: %d"),
+			*Choose, Session.IsAllChosen(INDEX_NONE, FString(), Choice), Session.NumEditedInLevel(), Session.NumOtherDirtyPackages());
+
+		const bool bSaved = Session.IsAllDecided() && Session.Save();
+		if (!ReportFile.IsEmpty())
+			Session.WriteReport(ReportFile);
+		UE_LOG(LogGitBlueprintMergeTestCase, Display, TEXT("LEVEL decided %d/%d, saved=%d"), Session.NumDecided(), Session.NumItems(), bSaved);
+		return bSaved ? 0 : 2;
 	}
 
 	bool SaveAsset(UObject* Asset, const FString& File)
@@ -717,6 +877,22 @@ int32 UGitBlueprintMergeTestCaseCommandlet::Main(const FString& Params)
 		FParse::Value(*Params, TEXT("Ours="), OursFile);
 		FParse::Value(*Params, TEXT("Theirs="), TheirsFile);
 		return CopyCheck(OursFile, TheirsFile);
+	}
+	if (FParse::Param(*Params, TEXT("LevelMergeCheck")))
+	{
+		FString Manifest, Choose, Report;
+		FParse::Value(*Params, TEXT("Manifest="), Manifest);
+		FParse::Value(*Params, TEXT("Choose="), Choose);
+		FParse::Value(*Params, TEXT("Report="), Report);
+		return LevelMergeCheck(Manifest, Choose, Report);
+	}
+	if (FParse::Param(*Params, TEXT("ActorLoadCheck")))
+	{
+		FString Level, OursFile, TheirsFile;
+		FParse::Value(*Params, TEXT("Level="), Level);
+		FParse::Value(*Params, TEXT("Ours="), OursFile);
+		FParse::Value(*Params, TEXT("Theirs="), TheirsFile);
+		return ActorLoadCheck(Level, BaseFile, OursFile, TheirsFile);
 	}
 	if (FParse::Param(*Params, TEXT("DataFixtures")) && !OutDir.IsEmpty())
 		return WriteDataFixtures(OutDir);

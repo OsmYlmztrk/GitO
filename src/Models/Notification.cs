@@ -10,13 +10,18 @@ namespace SourceGit.Models
         public string Message { get; set; }
         public bool IsError { get; set; }
 
-        public static void Send(string group, string message, bool isError = false)
+        // MyGitGUI: something didn't happen, but nothing failed (orange instead of the green notice).
+        public bool IsWarning { get; set; }
+        public bool IsNotice => !IsError && !IsWarning;
+
+        public static void Send(string group, string message, bool isError = false, bool isWarning = false)
         {
             Raised?.Invoke(new Notification
             {
                 Group = group,
                 Message = message,
-                IsError = isError
+                IsError = isError,
+                IsWarning = isWarning && !isError
             });
         }
     }

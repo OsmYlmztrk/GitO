@@ -491,6 +491,12 @@ namespace SourceGit.ViewModels
             Models.Notification.Send(FullPath, message, isError);
         }
 
+        // MyGitGUI: orange notice for "didn't happen" outcomes, so they don't read as success.
+        public void SendWarning(string message)
+        {
+            Models.Notification.Send(FullPath, message, false, true);
+        }
+
         /// <summary>
         ///     MyGitGUI: false (with a warning) when the Git account can't reach this HTTPS remote: not signed
         ///     in, or no permission. Fetch / pull / push then don't start, so no sign-in window pops up.
@@ -1356,6 +1362,7 @@ namespace SourceGit.ViewModels
                     .ConfigureAwait(false);
 
                 changes.Sort((l, r) => Models.NumericSort.Compare(l.Path, r.Path));
+                Models.UnrealActorInfo.Fill(FullPath, GitDir, changes); // MyGitGUI: actor names for hashed OFPA files
 
                 Dispatcher.UIThread.Invoke(() =>
                 {

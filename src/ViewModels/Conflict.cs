@@ -49,6 +49,52 @@ namespace SourceGit.ViewModels
             get => Path.GetFileName(_change.Path);
         }
 
+        // MyGitGUI: short text per conflict kind (deleted on one side, both changed, ...).
+        public string Explanation
+        {
+            get
+            {
+                return _change.ConflictReason switch
+                {
+                    Models.ConflictReason.DeletedByThem => "Deleted in Theirs, changed in Ours.",
+                    Models.ConflictReason.DeletedByUs => "Deleted in Ours, changed in Theirs.",
+                    Models.ConflictReason.AddedByUs => "Only in Ours.",
+                    Models.ConflictReason.AddedByThem => "Only in Theirs.",
+                    Models.ConflictReason.BothDeleted => "Deleted on both sides.",
+                    _ when IsBinary =>
+                        "This binary asset changed on both sides and can't be merged line by line. Keep one version, or merge both in your external merge tool (e.g. Unreal Editor).",
+                    _ => "Both sides changed this file. Open the merge editor to pick changes chunk by chunk, or keep one side entirely.",
+                };
+            }
+        }
+
+        // MyGitGUI: the actor behind a hashed One File Per Actor file, if this is one.
+        public Models.UnrealActorInfo Actor
+        {
+            get => _change.UnrealActor;
+        }
+
+        // MyGitGUI: actor conflicts are only merged in Unreal, all actors of the level together (user, 2026-10-14).
+        public bool IsLevelActor
+        {
+            get => _change.UnrealActor != null;
+        }
+
+        public List<Models.Change> LevelActors
+        {
+            get => _levelActors;
+        }
+
+        public bool ShowUnrealCard
+        {
+            get => IsUnrealAsset && !IsLevelActor;
+        }
+
+        public bool CanResolveLevel
+        {
+            get => CanOpenInUnreal && HasMergePlugin && _levelActors.Count > 0;
+        }
+
         public bool IsBinary
         {
             get => _state == Models.ConflictFileState.UnmergedBinary;
@@ -148,6 +194,8 @@ namespace SourceGit.ViewModels
             _repo = repo;
             _wc = wc;
             _change = change;
+            if (change.UnrealActor != null)
+                _levelActors = wc.GetLevelConflicts(change.UnrealActor.ActorsFolder);
 
             Task.Run(async () =>
             {
@@ -162,8 +210,10 @@ namespace SourceGit.ViewModels
                     _ => (_head, (object)"Stash or Patch"),
                 };
 
-                var state = Models.ConflictFileState.Unknown;
-                if ((_change.ConflictReason is Models.ConflictReason.BothAdded or Models.ConflictReason.BothModified) && !Directory.Exists(Path.Combine(_repo.FullPath, _change.Path)))
+                // MyGitGUI: an actor's file may hold ours without conflict markers (written for the level merge);
+                // it is still conflicted until the level merge stages it.
+                var state = change.UnrealActor != null ? Models.ConflictFileState.UnmergedBinary : Models.ConflictFileState.Unknown;
+                if (_change.UnrealActor == null && (_change.ConflictReason is Models.ConflictReason.BothAdded or Models.ConflictReason.BothModified) && !Directory.Exists(Path.Combine(_repo.FullPath, _change.Path)))
                     state = await new Commands.QueryConflictFileState(repo.FullPath, change)
                         .GetResultAsync()
                         .ConfigureAwait(false);
@@ -206,10 +256,13 @@ namespace SourceGit.ViewModels
                         ShowUnrealError("Unreal Editor for this project's engine version was not found.");
                     OnPropertyChanged(nameof(HasMergePlugin));
                     OnPropertyChanged(nameof(IsBinary));
+                    OnPropertyChanged(nameof(Explanation));
                     OnPropertyChanged(nameof(CanUseExternalMergeTool));
                     OnPropertyChanged(nameof(IsUnrealAsset));
                     OnPropertyChanged(nameof(CanOpenInUnreal));
                     OnPropertyChanged(nameof(CanMergeInUnreal));
+                    OnPropertyChanged(nameof(CanResolveLevel));
+                    OnPropertyChanged(nameof(ShowUnrealCard));
                 });
             });
         }
@@ -318,6 +371,31 @@ namespace SourceGit.ViewModels
         public Task OpenUnrealMergeToolAsync()
         {
             return StartUnrealMergeAsync(UnrealMerge.Mode.UnrealWindow);
+        }
+
+        /// <summary>
+        ///     MyGitGUI: opens the level in Unreal with every conflicted actor of it; the user decides each change there.
+        /// </summary>
+        public async Task ResolveLevelInUnrealAsync()
+        {
+            if (!CanResolveLevel || !_repo.CanCreatePopup())
+                return;
+
+            var actor = _change.UnrealActor;
+            var levelFile = actor.ActorsFolder.Replace("__ExternalActors__/", string.Empty) + ".umap";
+            var target = new UnrealLevelMergeTarget()
+            {
+                LevelName = actor.Level,
+                LevelPackage = Models.UnrealEngine.GetPackageName(_unrealProject, Path.Combine(_repo.FullPath, levelFile)),
+                Project = _unrealProject,
+                Editor = _unrealEditor,
+                Plugin = _mergePlugin,
+                OursLabel = _oursLabel,
+                TheirsLabel = _theirsLabel,
+                Actors = _levelActors,
+            };
+
+            await _repo.ShowAndStartPopupAsync(new UnrealLevelMerge(_repo, target));
         }
 
         /// <summary>
@@ -439,5 +517,6 @@ namespace SourceGit.ViewModels
         private string _oursLabel = string.Empty;
         private string _theirsLabel = string.Empty;
         private string _levelNotice = null;
+        private List<Models.Change> _levelActors = [];
     }
 }
